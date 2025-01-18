@@ -46,7 +46,7 @@ function generateRequestId() {
  * GET /
  **************************************************/
 app.get('/', (req, res) => {
-  res.send('KasperCoin Website Builder with advanced GPT-4o instructions is running!');
+  res.send('KasperCoin Website Builder with refined GPT-4o instructions is running!');
 });
 
 /**************************************************
@@ -55,7 +55,7 @@ app.get('/', (req, res) => {
  * {
  *   userInputs: {
  *     coinName: "SomeCoin",
- *     colorPalette: "neon-green and dark",
+ *     colorPalette: "purple and neon-blue",
  *     projectDesc: "futuristic memecoin style"
  *   }
  * }
@@ -120,22 +120,26 @@ async function doWebsiteGeneration(requestId, userInputs) {
 
     progressMap[requestId].progress = 10;
 
-    // This snippet is used as inspiration for shimmer, gradients, pinned footer, etc.
-    // We'll embed it in the system instructions, with no code fences.
+    // Updated system instructions to enforce:
+    // 1) Strict usage of user colorPalette in gradients
+    // 2) Non-sticky nav and footer
+    // 3) Images must relate to coinName + projectDesc
+    // 4) Tokenomics heading with 3 cards below it (vertical)
+    // 5) Roadmap is a timeline w/ progress bars, also vertical
+    // 6) Must see the gradient from colorPalette
+    // 7) No code fences leftover
+
     const snippetInspiration = `
-<!DOCTYPE html>
 <html>
 <head>
-  <meta charset="UTF-8"/>
-  <title>Shimmer Gradient Demo</title>
   <style>
+    /* Example gradient & shimmer */
     body {
-      margin: 0; padding: 0; 
-      font-family: 'Poppins', sans-serif; 
-      background: linear-gradient(135deg, #1f1c2c, #928DAB); 
-      color: #fff;
+      margin: 0; padding: 0;
+      font-family: sans-serif;
+      /* We want a strong gradient that matches user's colorPalette. */
     }
-    .shimmer {
+    .shimmer-bg {
       background: linear-gradient(90deg, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0.3) 50%, rgba(255,255,255,0.1) 100%);
       background-size: 200% 200%;
       animation: shimmerMove 2s infinite;
@@ -144,52 +148,52 @@ async function doWebsiteGeneration(requestId, userInputs) {
       0% { background-position: -200% 0; }
       100% { background-position: 200% 0; }
     }
-    footer {
-      position: absolute; 
-      bottom: 0; left: 0; right: 0; 
-      text-align: center;
-    }
   </style>
 </head>
 <body>
-  <div class="shimmer" style="padding:20px;">
-    <h1>Example Shimmer Gradient</h1>
-    <p>This is just an example snippet.</p>
-  </div>
+  <!-- Example snippet with shimmer -->
 </body>
 </html>
 `;
 
-    // GPT system instructions
     const systemMessage = `
-You are GPT-4o, an advanced coding AI. Produce a single-page HTML/CSS/JS site (nav, hero, roadmap with timeline progress bars, 3 tokenomics cards, pinned footer) using shimmering effects, gradients, advanced transitions, fully responsive design.
-
-Use snippet below as inspiration for shimmer/gradient/pinned footer. No code fences. No leftover triple backticks:
+You are a website building ai, the best of them all. 
+Produce a single-page highly advanced beautiful HTML/CSS/JS site based on kaspercoin.net with:
+1) Non-sticky nav (top), containing IMAGE_PLACEHOLDER_LOGO on left, unclickable links (Home, Roadmap, Tokenomics, etc.) on right.
+2) Hero/splash below nav, using a strong gradient background derived from "${colorPalette}" or a "background: linear-gradient(...)" with those colors. Then place IMAGE_PLACEHOLDER_BG as a decorative background or element. 
+   - Big heading = coinName: "${coinName}"
+   - subheading referencing projectDesc: "${projectDesc}"
+   - No sticky
+3) Roadmap: vertical timeline or steps, each with a small progress bar
+4) Tokenomics: heading, then 3 cards stacked vertically
+5) Footer at bottom (non-sticky), disclaimers, IMAGE_PLACEHOLDER_LOGO etc. 
+   - Must appear at end of page content (not pinned/sticky).
+6) Use advanced styling: shimmer, transitions, your colorPalette for gradients. 
+   - Absolutely incorporate the colorPalette in the main backgrounds or sections
+7) Images must relate to coinName & projectDesc (and used in DALL·E prompts).
+8) No leftover code fences or triple backticks. 
+9) The snippet below is partial inspiration:
 
 ${snippetInspiration}
 
-Output must contain:
+Now generate the final code in ONE file: 
 <!DOCTYPE html>
 <html>
   <head>
     <meta charset="UTF-8"/>
     <title>${coinName}</title>
-    <style> ... </style>
+    <style> ... MUST USE colorPalette in gradients ... </style>
   </head>
   <body>
-    <!-- Nav with IMAGE_PLACEHOLDER_LOGO, unclickable links -->
-    <!-- Hero with IMAGE_PLACEHOLDER_BG, big heading, subheader referencing ${coinName}, ${colorPalette}, ${projectDesc} -->
-    <!-- Roadmap: timeline with progress bars -->
-    <!-- Tokenomics: exactly 3 cards -->
-    <!-- Footer pinned at bottom -->
-    <script> ... </script>
+    <!-- nav, hero, roadmap timeline, tokenomics (3 cards), footer. 
+         Non-sticky nav or footer. 
+         Must visually show gradient from colorPalette. 
+         Must show advanced shimmer or transitions. 
+    -->
+    <script> ... any needed JS ... </script>
   </body>
 </html>
-No external code fences or triple backticks. Fully responsive, visually appealing with shimmer, gradient, pinned bottom footer, transitions. 
-Replace IMAGE_PLACEHOLDER_LOGO and IMAGE_PLACEHOLDER_BG with real images. 
-No real links, just visual placeholders (javascript:void(0)). 
-Now generate the final code in one block (HTML/CSS/JS combined).
-    `;
+`;
 
     progressMap[requestId].progress = 20;
 
@@ -197,7 +201,7 @@ Now generate the final code in one block (HTML/CSS/JS combined).
       model: "gpt-4o",
       messages: [
         { role: "system", content: systemMessage },
-        { role: "user", content: "Produce the single-page code with shimmer, gradient, pinned footer, no code fences." }
+        { role: "user", content: "Generate the single-file site now, strictly following colorPalette, non-sticky nav/footer, 3 token cards, vertical roadmap timeline, no leftover code fences." }
       ],
       max_tokens: 3500,
       temperature: 0.9
@@ -206,13 +210,15 @@ Now generate the final code in one block (HTML/CSS/JS combined).
     let siteCode = gptResponse.data.choices[0].message.content.trim();
     progressMap[requestId].progress = 40;
 
-    // We generate 2 images with DALL·E: LOGO + BG
+    // Generate 2 images with DALL·E:
+    // 1) IMAGE_PLACEHOLDER_LOGO => must relate to coinName & projectDesc
+    // 2) IMAGE_PLACEHOLDER_BG => must reference colorPalette & coinName too
     const placeholders = {};
 
     // (A) LOGO
     progressMap[requestId].progress = 50;
     try {
-      const logoPrompt = `${projectDesc || "memecoin"} coin logo for "${coinName}", small, futuristic, referencing palette ${colorPalette}, shimmering effect vibe.`;
+      const logoPrompt = `logo for a memecoin called "${coinName}", color palette "${colorPalette}", project vibe: ${projectDesc}, small eye-catching design, not sticky. Must match coin name.`;
       const logoResp = await openai.createImage({
         prompt: logoPrompt,
         n: 1,
@@ -230,7 +236,7 @@ Now generate the final code in one block (HTML/CSS/JS combined).
     // (B) BG
     progressMap[requestId].progress = 60;
     try {
-      const bgPrompt = `${projectDesc || "memecoin"} hero background referencing palette "${colorPalette}", futuristic, bold, shimmering/gradient, comedic or edgy vibes.`;
+      const bgPrompt = `hero background for a memecoin called "${coinName}", color palette "${colorPalette}", referencing ${projectDesc}, advanced gradient or shimmer, futuristic. Must match coin name and color vibe.`;
       const bgResp = await openai.createImage({
         prompt: bgPrompt,
         n: 1,
@@ -275,5 +281,5 @@ Now generate the final code in one block (HTML/CSS/JS combined).
  **************************************************/
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
-  console.log(`KasperCoin Website Builder API running on port ${PORT} with GPT-4o!`);
+  console.log(`KasperCoin Website Builder API running on port ${PORT}, GPT-4o!`);
 });
