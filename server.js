@@ -159,13 +159,13 @@ async function doWebsiteGeneration(requestId, userInputs) {
     const systemMessage = `
 You are a website building ai, the best of them all. 
 Produce a single-page highly advanced beautiful HTML/CSS/JS site based on kaspercoin.net with:
-1) Non-sticky nav (top), containing IMAGE_PLACEHOLDER_LOGO on left, unclickable links (Home, Roadmap, Tokenomics, etc.) on right.
-2) Hero/splash below nav, using a strong gradient background derived from "${colorPalette}" or a "background: linear-gradient(...)" with those colors. Then place IMAGE_PLACEHOLDER_BG as a decorative background or element. 
+1) modern animated Non-sticky nav (top), containing IMAGE_PLACEHOLDER_LOGO on left, unclickable links (Home, Roadmap, Tokenomics, etc.) on right.
+2) modern beautiful Hero/splash below nav, using a strong gradient background derived from "${colorPalette}" or a "background: linear-gradient(...)" with those colors. Then place IMAGE_PLACEHOLDER_BG as a decorative background or element. 
    - Big heading = coinName: "${coinName}"
    - subheading referencing projectDesc: "${projectDesc}"
    - No sticky
-3) Roadmap: vertical timeline or steps, each with a small progress bar
-4) Tokenomics: heading, then 3 cards stacked vertically
+3) Roadmap: vertical timeline or steps, each with a small progress bar. use placeholder content.
+4) Tokenomics: heading, then 3 cards laid out horizontally. nice clean animations and crisp gradients.
 5) Footer at bottom (non-sticky), disclaimers, IMAGE_PLACEHOLDER_LOGO etc. 
    - Must appear at end of page content (not pinned/sticky).
 6) Use advanced styling: shimmer, transitions, your colorPalette for gradients. 
@@ -193,7 +193,7 @@ Now generate the final code in ONE file:
     <script> ... any needed JS ... </script>
   </body>
 </html>
-`;
+make sure to include all the final beautiful html css js. quality is the most important thing`;
 
     progressMap[requestId].progress = 20;
 
