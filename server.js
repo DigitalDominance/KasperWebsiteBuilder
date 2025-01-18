@@ -198,7 +198,7 @@ make sure to include all the final beautiful html css js. quality is the most im
     progressMap[requestId].progress = 20;
 
     const gptResponse = await openai.createChatCompletion({
-      model: "o1-mini",
+      model: "gpt-4o",
       messages: [
         { role: "system", content: systemMessage },
         { role: "user", content: "Generate the single-file site now, strictly following colorPalette, non-sticky nav/footer, 3 token cards, vertical roadmap timeline, no leftover code fences. beautiful styling. responsive. modern" }
