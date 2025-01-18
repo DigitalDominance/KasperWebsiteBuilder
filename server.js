@@ -8,24 +8,16 @@ const fetch = require('node-fetch'); // used for fetching DALL·E images
 const app = express();
 
 /**
- * Restrict CORS to https://www.kaspercoin.net/websitebuilder only
+ * CORS: allow requests from both https://www.kaspercoin.net and https://kaspercoin.net
  */
-const allowedOrigins = [
-  "https://www.kaspercoin.net",
-  "https://kaspercoin.net"
-];
-const corsOptions = {
-  origin: function (origin, callback) {
-    if (!origin || allowedOrigins.includes(origin)) {
-      callback(null, true);
-    } else {
-      callback(new Error("Not allowed by CORS"));
-    }
-  },
+app.use(cors({
+  origin: [
+    'https://www.kaspercoin.net',
+    'https://kaspercoin.net'
+  ],
   methods: ["GET", "POST", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization"],
-};
-app.use(cors(corsOptions));
+  allowedHeaders: ["Content-Type", "Authorization"]
+}));
 
 app.use(bodyParser.json());
 
@@ -45,14 +37,6 @@ app.get('/', (req, res) => {
 
 /**
  * POST /generate-website-code
- * Expects JSON body with structure:
- * {
- *   userInputs: {
- *     coinName: string,
- *     colorPalette: string,
- *     imagePrompts: string[]
- *   }
- * }
  */
 app.post('/generate-website-code', async (req, res) => {
   try {
@@ -61,7 +45,7 @@ app.post('/generate-website-code', async (req, res) => {
       return res.status(400).json({ error: "Please provide 'coinName' and 'colorPalette' in userInputs." });
     }
 
-    // Build the GPT prompt referencing kaspercoin.net style & the new sections
+    // GPT prompt
     const prompt = `
       You are a coding AI specialized in building fun, memecoin-style websites,
       strongly inspired by kaspercoin.net. The user wants a fully responsive
@@ -107,7 +91,6 @@ app.post('/generate-website-code', async (req, res) => {
     if (Array.isArray(userInputs.imagePrompts) && userInputs.imagePrompts.length > 0) {
       for (let i = 0; i < userInputs.imagePrompts.length; i++) {
         const description = userInputs.imagePrompts[i];
-        // Tweak prompt for a memecoin vibe, referencing kaspercoin.net
         const finalImagePrompt = `${description}, in a crypto memecoin style, referencing kaspercoin.net aesthetics, trending on artstation, 4k`;
 
         try {
@@ -118,30 +101,29 @@ app.post('/generate-website-code', async (req, res) => {
           });
           const dallEUrl = imageResponse.data.data[0].url;
 
-          // Fetch the image from OpenAI URL, convert to base64
+          // Fetch the image, convert to base64
           const imageFetch = await fetch(dallEUrl);
           const imageBuffer = await imageFetch.arrayBuffer();
           const base64Data = Buffer.from(imageBuffer).toString('base64');
-          // We'll assume PNG format
           const dataUri = `data:image/png;base64,${base64Data}`;
           imageUrls.push(dataUri);
 
         } catch (err) {
           console.error("Error generating/fetching image:", err);
-          // Fallback: Provide a placeholder base64
-          imageUrls.push("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMAAAAAwCAYAAABLWConAAAAAklEQVR4nO3BMQEAAADCoPdPbQ43oAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD4KUznAAGWO4agAAAAAElFTkSuQmCC");
+          // fallback placeholder
+          imageUrls.push("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMAAAAAwCAYAAABLWConAAAAAElFTkSuQmCC");
         }
       }
     }
 
-    // 3) Replace placeholders in generated code
+    // 3) Replace placeholders
     imageUrls.forEach((base64Uri, i) => {
       const placeholder = `IMAGE_PLACEHOLDER_${i+1}`;
       const regex = new RegExp(placeholder, 'g');
       generatedCode = generatedCode.replace(regex, base64Uri);
     });
 
-    // Send final HTML code to client
+    // Return final HTML code
     return res.json({ code: generatedCode });
 
   } catch (error) {
