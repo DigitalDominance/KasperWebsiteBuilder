@@ -10,8 +10,18 @@ const app = express();
 /**
  * Restrict CORS to https://www.kaspercoin.net/websitebuilder only
  */
+const allowedOrigins = [
+  "https://www.kaspercoin.net",
+  "https://kaspercoin.net"
+];
 const corsOptions = {
-  origin: "https://www.kaspercoin.net",
+  origin: function (origin, callback) {
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error("Not allowed by CORS"));
+    }
+  },
   methods: ["GET", "POST", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization"],
 };
