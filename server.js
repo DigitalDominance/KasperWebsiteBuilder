@@ -39,14 +39,14 @@ const progressMap = {};
 
 /** Generate a random ID (for request tracking) */
 function generateRequestId() {
-  return Math.random().toString(36).substr(2, 9); 
+  return Math.random().toString(36).substr(2, 9);
 }
 
 /**************************************************
  * GET /
  **************************************************/
 app.get('/', (req, res) => {
-  res.send('KasperCoin Website Builder with Progress Tracking is running!');
+  res.send('KasperCoin Website Builder with Progress Tracking is running (GPT-4o)!');
 });
 
 /**************************************************
@@ -119,81 +119,89 @@ app.get('/result', (req, res) => {
  **************************************************/
 async function doWebsiteGeneration(requestId, userInputs) {
   try {
-    // Basic checks
     const { coinName, colorPalette, projectDesc } = userInputs || {};
     if (!coinName || !colorPalette) {
       throw new Error("Missing 'coinName' or 'colorPalette'.");
     }
 
-    // 1) Start
     progressMap[requestId].progress = 10;
 
-    // 2) Create the GPT system instructions for advanced styling & placeholders
+    // 1) GPT-4o system instructions
     const systemMessage = `
       You are a coding AI specialized in building extremely modern, visually stunning,
-      single-page memecoin websites. Produce a single HTML/CSS/JS file (all in one)
-      that includes advanced animations, modern layout, and a highly polished design.
+      single-page memecoin websites with advanced styling.
 
-      REQUIRED SECTIONS (in order, top to bottom):
-      1) NAVIGATION BAR at the top:
-         - Left side: a small token logo placeholder (IMAGE_PLACEHOLDER_LOGO).
-         - Right side: nav links (Home, Tokenomics, Roadmap, FAQ).
-      2) SPLASH (HERO) SECTION:
-         - Full-width, full-height hero with background image placeholder (IMAGE_PLACEHOLDER_BG).
-         - Big bold headline for the coin name: "${coinName}".
-         - Possibly a short subheader or tagline referencing the color palette: "${colorPalette}".
-         - A call-to-action button with a nice hover or click animation.
-      3) TOKENOMICS SECTION:
-         - Key stats about supply, distribution, etc. (just sample text).
-         - Modern animations or transitions.
-      4) ROADMAP SECTION:
-         - A timeline or milestone cards with subtle transitions.
-      5) FAQ SECTION:
-         - Accordion or collapsible items with smooth animation.
-      6) FOOTER at the bottom:
-         - Typical memecoin disclaimers, social links (X/Twitter, Telegram).
-         - Must be visually anchored to the page bottom if content is short.
+      ### SCOPE:
+      - Produce THREE logical "files": HTML, CSS, and JS—but combine them into ONE final output.
+      - This means your final output must have:
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <meta charset="UTF-8" />
+          <title>${coinName}</title>
+          <style>
+            /* Place all advanced CSS here */
+          </style>
+        </head>
+        <body>
+          <!-- Nav, Splash, Roadmap, Tokenomics, Footer in that order -->
+          <!-- Use placeholders for images:
+               IMAGE_PLACEHOLDER_LOGO (nav)
+               IMAGE_PLACEHOLDER_BG   (hero) -->
 
-      ADDITIONAL STYLING/ANIMATION REQUIREMENTS:
-      - Use advanced modern styling (e.g., gradients, transitions, keyframe animations).
-      - Fully responsive (mobile, tablet, desktop).
-      - Well-commented code if needed, minimal JS for interactivity (e.g. FAQ accordion).
-      - Output everything in one file, with placeholders:
-        IMAGE_PLACEHOLDER_LOGO for the nav logo,
-        IMAGE_PLACEHOLDER_BG for the hero background.
-      - No additional explanation or text, just the HTML/CSS/JS in one file.
+          <script>
+            // Place any JS needed (e.g., FAQ accordion logic) here
+          </script>
+        </body>
+        </html>
 
-      The user also provided a short project description: "${projectDesc}". Feel free to
-      incorporate that vibe or style (e.g., futuristic, comedic, etc.) into the design.
+      ### REQUIRED SECTIONS (in order):
+      1) NAV (top): left = logo (IMAGE_PLACEHOLDER_LOGO), right = nav links (Home, Roadmap, Tokenomics, FAQ) - but they do nothing.
+      2) SPLASH (hero) below nav:
+         - Fullwidth background image (IMAGE_PLACEHOLDER_BG).
+         - Big heading with coin name "${coinName}".
+         - A short subheader referencing color palette "${colorPalette}" and project vibe "${projectDesc}".
+      3) ROADMAP section.
+      4) TOKENOMICS section.
+      5) FOOTER at bottom (even if content is short).
+         - Memecoin disclaimers, social links, etc.
+
+      ### STYLING/ANIMATION REQUIREMENTS:
+      - Minimal or no external libraries. Just advanced CSS (keyframes, transitions).
+      - Fully responsive. 
+      - Use modern gradient backgrounds, frosted glass, or bold neon if it suits the palette.
+      - The final code must be visually appealing and not basic.
+      - The nav links do NOT navigate anywhere. They are purely visual.
+
+      ### OUTPUT:
+      - Provide one single block of HTML with <style> and <script> included inline.
+      - No additional commentary, no separate files. Just the code.
     `;
 
     progressMap[requestId].progress = 20;
 
-    // 3) Call GPT (ChatCompletion) to get the single-page code
+    // 2) Call GPT-4o
     const gptResponse = await openai.createChatCompletion({
-      model: "gpt-3.5-turbo",
+      model: "gpt-4o", // custom or fine-tuned GPT-4 model
       messages: [
         { role: "system", content: systemMessage },
-        { role: "user", content: "Generate the single-page site code now." }
+        { role: "user", content: "Generate the advanced single-page site code now. " }
       ],
-      max_tokens: 2000,
+      max_tokens: 3000,
       temperature: 0.9
     });
 
     let siteCode = gptResponse.data.choices[0].message.content.trim();
     progressMap[requestId].progress = 40;
 
-    // 4) We have 2 placeholders to fill:
-    //    1) IMAGE_PLACEHOLDER_LOGO
-    //    2) IMAGE_PLACEHOLDER_BG
-    // We'll create 2 separate DALL·E images for them.
-
+    // 3) Generate two DALL·E images
+    //    placeholders: IMAGE_PLACEHOLDER_LOGO, IMAGE_PLACEHOLDER_BG
     const placeholders = {};
 
-    // (A) Generate LOGO
+    // (A) LOGO
     progressMap[requestId].progress = 50;
     try {
-      const logoPrompt = `${projectDesc || "memecoin style"} coin logo for "${coinName}", small, futuristic, eye-catching design`;
+      const logoPrompt = `${projectDesc || "memecoin"} coin logo for "${coinName}", small, futuristic, eye-catching design, referencing palette ${colorPalette}`;
       const logoResponse = await openai.createImage({
         prompt: logoPrompt,
         n: 1,
@@ -206,14 +214,13 @@ async function doWebsiteGeneration(requestId, userInputs) {
       placeholders["IMAGE_PLACEHOLDER_LOGO"] = `data:image/png;base64,${Buffer.from(logoBuffer).toString('base64')}`;
     } catch (err) {
       console.error("Logo generation error:", err);
-      // fallback
       placeholders["IMAGE_PLACEHOLDER_LOGO"] = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAUAAAAFCAYAAACNbyblAAAAHElEQVQIW2Nk+M+ACzFEFwoKMvClX6BAsAwAGgGFu6+opmQAAAABJRU5ErkJggg==";
     }
 
-    // (B) Generate HERO BG
+    // (B) HERO BG
     progressMap[requestId].progress = 60;
     try {
-      const bgPrompt = `${projectDesc || "memecoin"} background for a hero section, referencing color palette "${colorPalette}", futuristic, bold, eye-catching`;
+      const bgPrompt = `${projectDesc || "memecoin"} hero background referencing color palette "${colorPalette}", futuristic, bold, eye-catching`;
       const bgResponse = await openai.createImage({
         prompt: bgPrompt,
         n: 1,
@@ -226,13 +233,12 @@ async function doWebsiteGeneration(requestId, userInputs) {
       placeholders["IMAGE_PLACEHOLDER_BG"] = `data:image/png;base64,${Buffer.from(bgBuffer).toString('base64')}`;
     } catch (err) {
       console.error("BG generation error:", err);
-      // fallback
       placeholders["IMAGE_PLACEHOLDER_BG"] = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAUAAAAFCAYAAACNbyblAAAAHElEQVQIW2Nk+M+ACzFEFwoKMvClX6BAsAwAGgGFu6+opmQAAAABJRU5ErkJggg==";
     }
 
     progressMap[requestId].progress = 80;
 
-    // 5) Replace placeholders in the GPT code
+    // 4) Replace placeholders in the GPT code
     Object.keys(placeholders).forEach((phKey) => {
       const base64Uri = placeholders[phKey];
       const regex = new RegExp(phKey, 'g');
@@ -241,7 +247,7 @@ async function doWebsiteGeneration(requestId, userInputs) {
 
     progressMap[requestId].progress = 90;
 
-    // 6) Save final code, set status = done
+    // 5) Save final code, set status = done
     progressMap[requestId].code = siteCode;
     progressMap[requestId].progress = 100;
     progressMap[requestId].status = 'done';
@@ -258,5 +264,5 @@ async function doWebsiteGeneration(requestId, userInputs) {
  **************************************************/
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
-  console.log(`KasperCoin Website Builder API running on port ${PORT}`);
+  console.log(`KasperCoin Website Builder API running on port ${PORT} (GPT-4o)!`);
 });
