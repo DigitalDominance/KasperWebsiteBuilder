@@ -1,3 +1,5 @@
+// backend/server.js
+
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
@@ -38,6 +40,7 @@ const progressMap = {};
 //   code: string | null
 // };
 
+/** Generate a random ID (for request tracking) */
 function generateRequestId() {
   return Math.random().toString(36).substr(2, 9);
 }
@@ -109,6 +112,55 @@ app.get('/result', (req, res) => {
 });
 
 /**************************************************
+ * GET /export?requestId=XYZ&type=full|wordpress
+ **************************************************/
+app.get('/export', (req, res) => {
+  const { requestId, type } = req.query;
+  if (!requestId || !progressMap[requestId]) {
+    return res.status(400).json({ error: "Invalid or missing requestId" });
+  }
+
+  const { status, code } = progressMap[requestId];
+  if (status !== 'done') {
+    return res.status(400).json({ error: "Generation not completed or encountered an error." });
+  }
+
+  if (!type || !['full', 'wordpress'].includes(type)) {
+    return res.status(400).json({ error: "Invalid or missing export type. Use 'full' or 'wordpress'." });
+  }
+
+  if (type === 'full') {
+    // Export as full HTML file
+    res.setHeader('Content-Type', 'text/html');
+    res.setHeader('Content-Disposition', `attachment; filename="${sanitizeFilename(requestId)}_website.html"`);
+    return res.send(code);
+  } else if (type === 'wordpress') {
+    // Wrap the HTML into a WordPress page template
+    const wordpressTemplate = `<?php
+/**
+ * Template Name: ${sanitizeFilename(requestId)}_Generated_Website
+ */
+get_header(); ?>
+
+<div id="generated-website">
+${code}
+</div>
+
+<?php get_footer(); ?>
+`;
+
+    res.setHeader('Content-Type', 'application/php');
+    res.setHeader('Content-Disposition', `attachment; filename="${sanitizeFilename(requestId)}_generated_website.php"`);
+    return res.send(wordpressTemplate);
+  }
+});
+
+/** Utility to sanitize filenames */
+function sanitizeFilename(name) {
+  return name.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+}
+
+/**************************************************
  * Background Generation Function
  **************************************************/
 async function doWebsiteGeneration(requestId, userInputs) {
@@ -120,15 +172,8 @@ async function doWebsiteGeneration(requestId, userInputs) {
 
     progressMap[requestId].progress = 10;
 
-    // Updated system instructions to enforce:
-    // 1) Strict usage of user colorPalette in gradients
-    // 2) Non-sticky nav and footer
-    // 3) Images must relate to coinName + projectDesc
-    // 4) Tokenomics heading with 3 cards below it (vertical)
-    // 5) Roadmap is a timeline w/ progress bars, also vertical
-    // 6) Must see the gradient from colorPalette
-    // 7) No code fences leftover
-
+    // This snippet is used as inspiration for shimmer, gradients, pinned footer, etc.
+    // We'll embed it in the system instructions, with no code fences.
     const snippetInspiration = `
 <html>
 <head>
@@ -156,44 +201,71 @@ async function doWebsiteGeneration(requestId, userInputs) {
 </html>
 `;
 
+    // GPT system instructions
     const systemMessage = `
-You are a website building ai, the best of them all. 
-Produce a single-page highly advanced beautiful HTML/CSS/JS site based on kaspercoin.net with:
-1) modern animated Non-sticky nav (top), containing IMAGE_PLACEHOLDER_LOGO on left, unclickable links (Home, Roadmap, Tokenomics, etc.) on right.
-2) modern beautiful Hero/splash below nav, using a strong gradient background derived from "${colorPalette}" or a "background: linear-gradient(...)" with those colors. Then place IMAGE_PLACEHOLDER_BG as a decorative background or element. 
-   - Big heading = coinName: "${coinName}"
-   - subheading referencing projectDesc: "${projectDesc}"
-   - No sticky
-3) Roadmap: vertical timeline or steps, each with a small progress bar. use placeholder content.
-4) Tokenomics: heading, then 3 cards laid out horizontally. nice clean animations and crisp gradients.
-5) Footer at bottom (non-sticky), disclaimers, IMAGE_PLACEHOLDER_LOGO etc. 
-   - Must appear at end of page content (not pinned/sticky).
-6) Use advanced styling: shimmer, transitions, your colorPalette for gradients. Fully desktop and mobile responsive.
-   - Absolutely incorporate the colorPalette in the main backgrounds or sections
-7) Images must relate to coinName & projectDesc (and used in DALL·E prompts).
-8) No leftover code fences or triple backticks. 
-9) The snippet below is partial inspiration:
+You are GPT-4o, an advanced website building AI, the best of them all. 
+Produce a single-page highly advanced and beautiful HTML/CSS/JS site based on kaspercoin.net with the following specifications:
+
+1) **Non-Sticky Nav (Top)**
+   - Contains IMAGE_PLACEHOLDER_LOGO on the left.
+   - Unclickable links (Home, Roadmap, Tokenomics, etc.) on the right.
+
+2) **Modern Beautiful Hero/Splash Below Nav**
+   - Uses a strong gradient background derived from "${colorPalette}".
+   - Includes IMAGE_PLACEHOLDER_BG as a decorative background or element.
+   - Big heading displaying the coin name: "${coinName}".
+   - Subheading referencing the project description: "${projectDesc}".
+   - No sticky behavior.
+
+3) **Roadmap Section**
+   - Vertical timeline or steps, each with a small progress bar.
+   - Use placeholder content.
+
+4) **Tokenomics Section**
+   - Heading for Tokenomics.
+   - Exactly 3 cards laid out vertically with clean animations and crisp gradients.
+
+5) **Footer at Bottom (Non-Sticky)**
+   - Contains disclaimers, social links, etc.
+   - Includes IMAGE_PLACEHOLDER_LOGO.
+   - Must appear at the end of page content (not pinned/sticky).
+
+6) **Advanced Styling**
+   - Incorporate shimmer effects, transitions, and the provided colorPalette for gradients.
+   - Fully responsive design for desktop and mobile.
+   - Absolutely incorporate the colorPalette in the main backgrounds or sections.
+
+7) **Images**
+   - Must relate to coinName & projectDesc (to be used in DALL·E prompts).
+
+8) **Output Format**
+   - No leftover code fences or triple backticks.
+   - Output in ONE file with:
+     <!DOCTYPE html>
+     <html>
+       <head>
+         <meta charset="UTF-8"/>
+         <title>${coinName}</title>
+         <style> ... MUST USE colorPalette in gradients ... </style>
+       </head>
+       <body>
+         <!-- nav, hero, roadmap timeline, tokenomics (3 cards), footer. 
+              Non-sticky nav or footer. 
+              Must visually show gradient from colorPalette. 
+              Must show advanced shimmer or transitions. 
+         -->
+         <script> ... any needed JS ... </script>
+       </body>
+     </html>
+
+   - Make sure to include all the final beautiful HTML, CSS, and JS. Quality is the most important thing.
+
+Use the snippet below as partial inspiration (but do not include code fences in your output):
 
 ${snippetInspiration}
 
-Now generate the final code in ONE file: 
-<!DOCTYPE html>
-<html>
-  <head>
-    <meta charset="UTF-8"/>
-    <title>${coinName}</title>
-    <style> ... MUST USE colorPalette in gradients ... </style>
-  </head>
-  <body>
-    <!-- nav, hero, roadmap timeline, tokenomics (3 cards), footer. 
-         Non-sticky nav or footer. 
-         Must visually show gradient from colorPalette. 
-         Must show advanced shimmer or transitions. 
-    -->
-    <script> ... any needed JS ... </script>
-  </body>
-</html>
-make sure to include all the final beautiful html css js. quality is the most important thing`;
+Now generate the final code in ONE beautiful block with all HTML, CSS, and JS included.
+`;
 
     progressMap[requestId].progress = 20;
 
@@ -201,7 +273,7 @@ make sure to include all the final beautiful html css js. quality is the most im
       model: "gpt-4o",
       messages: [
         { role: "system", content: systemMessage },
-        { role: "user", content: "Generate the single-file site now, strictly following colorPalette, non-sticky nav/footer, 3 token cards, vertical roadmap timeline, no leftover code fences. beautiful styling. responsive. modern" }
+        { role: "user", content: "Generate the single-file site now, strictly following colorPalette, non-sticky nav/footer, 3 token cards, vertical roadmap timeline, no leftover code fences. Beautiful styling. Responsive. Modern." }
       ],
       max_tokens: 3500,
       temperature: 0.9
@@ -277,7 +349,7 @@ make sure to include all the final beautiful html css js. quality is the most im
 }
 
 /**************************************************
- * Launch
+ * Launch the Server
  **************************************************/
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
