@@ -30,14 +30,14 @@ const openai = new OpenAIApi(configuration);
 /**************************************************
  * In-Memory Progress & Results
  **************************************************/
-const progressMap = {}; 
+const progressMap = {};
+
 // progressMap[requestId] = {
 //   status: 'in-progress' | 'done' | 'error',
 //   progress: number, // 0..100
 //   code: string | null
 // };
 
-/** Generate a random ID (for request tracking) */
 function generateRequestId() {
   return Math.random().toString(36).substr(2, 9);
 }
@@ -46,12 +46,12 @@ function generateRequestId() {
  * GET /
  **************************************************/
 app.get('/', (req, res) => {
-  res.send('KasperCoin Website Builder with Progress Tracking is running (GPT-4o)!');
+  res.send('KasperCoin Website Builder with advanced GPT-4o instructions is running!');
 });
 
 /**************************************************
  * POST /start-generation
- * Expects JSON like:
+ * Expects:
  * {
  *   userInputs: {
  *     coinName: "SomeCoin",
@@ -62,17 +62,14 @@ app.get('/', (req, res) => {
  * Returns { requestId }
  **************************************************/
 app.post('/start-generation', (req, res) => {
-  // 1) Generate requestId
   const requestId = generateRequestId();
 
-  // 2) Initialize progress
   progressMap[requestId] = {
     status: 'in-progress',
     progress: 0,
     code: null
   };
 
-  // 3) Start background generation (async)
   doWebsiteGeneration(requestId, req.body.userInputs)
     .catch(err => {
       console.error("Background generation error:", err);
@@ -80,13 +77,11 @@ app.post('/start-generation', (req, res) => {
       progressMap[requestId].progress = 100;
     });
 
-  // 4) Return requestId immediately
   return res.json({ requestId });
 });
 
 /**************************************************
  * GET /progress?requestId=XYZ
- * Returns { status, progress }
  **************************************************/
 app.get('/progress', (req, res) => {
   const { requestId } = req.query;
@@ -99,7 +94,6 @@ app.get('/progress', (req, res) => {
 
 /**************************************************
  * GET /result?requestId=XYZ
- * Returns { code } if status === 'done'
  **************************************************/
 app.get('/result', (req, res) => {
   const { requestId } = req.query;
@@ -126,111 +120,126 @@ async function doWebsiteGeneration(requestId, userInputs) {
 
     progressMap[requestId].progress = 10;
 
-    // 1) GPT-4o system instructions
+    // This snippet is used as inspiration for shimmer, gradients, pinned footer, etc.
+    // We'll embed it in the system instructions, with no code fences.
+    const snippetInspiration = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8"/>
+  <title>Shimmer Gradient Demo</title>
+  <style>
+    body {
+      margin: 0; padding: 0; 
+      font-family: 'Poppins', sans-serif; 
+      background: linear-gradient(135deg, #1f1c2c, #928DAB); 
+      color: #fff;
+    }
+    .shimmer {
+      background: linear-gradient(90deg, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0.3) 50%, rgba(255,255,255,0.1) 100%);
+      background-size: 200% 200%;
+      animation: shimmerMove 2s infinite;
+    }
+    @keyframes shimmerMove {
+      0% { background-position: -200% 0; }
+      100% { background-position: 200% 0; }
+    }
+    footer {
+      position: absolute; 
+      bottom: 0; left: 0; right: 0; 
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+  <div class="shimmer" style="padding:20px;">
+    <h1>Example Shimmer Gradient</h1>
+    <p>This is just an example snippet.</p>
+  </div>
+</body>
+</html>
+`;
+
+    // GPT system instructions
     const systemMessage = `
-      You are a coding AI specialized in building extremely modern, visually stunning,
-      single-page memecoin websites with advanced styling.
+You are GPT-4o, an advanced coding AI. Produce a single-page HTML/CSS/JS site (nav, hero, roadmap with timeline progress bars, 3 tokenomics cards, pinned footer) using shimmering effects, gradients, advanced transitions, fully responsive design.
 
-      ### SCOPE:
-      - Produce THREE logical "files": HTML, CSS, and JS—but combine them into ONE final output.
-      - This means your final output must have:
-        <!DOCTYPE html>
-        <html>
-        <head>
-          <meta charset="UTF-8" />
-          <title>${coinName}</title>
-          <style>
-            /* Place all advanced CSS here */
-          </style>
-        </head>
-        <body>
-          <!-- Nav, Splash, Roadmap, Tokenomics, Footer in that order -->
-          <!-- Use placeholders for images:
-               IMAGE_PLACEHOLDER_LOGO (nav)
-               IMAGE_PLACEHOLDER_BG   (hero) -->
+Use snippet below as inspiration for shimmer/gradient/pinned footer. No code fences. No leftover triple backticks:
 
-          <script>
-            // Place any JS needed (e.g., FAQ accordion logic) here
-          </script>
-        </body>
-        </html>
+${snippetInspiration}
 
-      ### REQUIRED SECTIONS (in order):
-      1) NAV (top): left = logo (IMAGE_PLACEHOLDER_LOGO), right = nav links (Home, Roadmap, Tokenomics, FAQ) - but they do nothing.
-      2) SPLASH (hero) below nav:
-         - Fullwidth background image (IMAGE_PLACEHOLDER_BG).
-         - Big heading with coin name "${coinName}".
-         - A short subheader referencing color palette "${colorPalette}" and project vibe "${projectDesc}".
-      3) ROADMAP section.
-      4) TOKENOMICS section.
-      5) FOOTER at bottom (even if content is short).
-         - Memecoin disclaimers, social links, etc.
-
-      ### STYLING/ANIMATION REQUIREMENTS:
-      - Minimal or no external libraries. Just advanced CSS (keyframes, transitions).
-      - Fully responsive. 
-      - Use modern gradient backgrounds, frosted glass, or bold neon if it suits the palette.
-      - The final code must be visually appealing and not basic.
-      - The nav links do NOT navigate anywhere. They are purely visual.
-
-      ### OUTPUT:
-      - Provide one single block of HTML with <style> and <script> included inline.
-      - No additional commentary, no separate files. Just the code.
+Output must contain:
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8"/>
+    <title>${coinName}</title>
+    <style> ... </style>
+  </head>
+  <body>
+    <!-- Nav with IMAGE_PLACEHOLDER_LOGO, unclickable links -->
+    <!-- Hero with IMAGE_PLACEHOLDER_BG, big heading, subheader referencing ${coinName}, ${colorPalette}, ${projectDesc} -->
+    <!-- Roadmap: timeline with progress bars -->
+    <!-- Tokenomics: exactly 3 cards -->
+    <!-- Footer pinned at bottom -->
+    <script> ... </script>
+  </body>
+</html>
+No external code fences or triple backticks. Fully responsive, visually appealing with shimmer, gradient, pinned bottom footer, transitions. 
+Replace IMAGE_PLACEHOLDER_LOGO and IMAGE_PLACEHOLDER_BG with real images. 
+No real links, just visual placeholders (javascript:void(0)). 
+Now generate the final code in one block (HTML/CSS/JS combined).
     `;
 
     progressMap[requestId].progress = 20;
 
-    // 2) Call GPT-4o
     const gptResponse = await openai.createChatCompletion({
-      model: "gpt-4o", // custom or fine-tuned GPT-4 model
+      model: "gpt-4o",
       messages: [
         { role: "system", content: systemMessage },
-        { role: "user", content: "Generate the advanced single-page site code now. " }
+        { role: "user", content: "Produce the single-page code with shimmer, gradient, pinned footer, no code fences." }
       ],
-      max_tokens: 3000,
+      max_tokens: 3500,
       temperature: 0.9
     });
 
     let siteCode = gptResponse.data.choices[0].message.content.trim();
     progressMap[requestId].progress = 40;
 
-    // 3) Generate two DALL·E images
-    //    placeholders: IMAGE_PLACEHOLDER_LOGO, IMAGE_PLACEHOLDER_BG
+    // We generate 2 images with DALL·E: LOGO + BG
     const placeholders = {};
 
     // (A) LOGO
     progressMap[requestId].progress = 50;
     try {
-      const logoPrompt = `${projectDesc || "memecoin"} coin logo for "${coinName}", small, futuristic, eye-catching design, referencing palette ${colorPalette}`;
-      const logoResponse = await openai.createImage({
+      const logoPrompt = `${projectDesc || "memecoin"} coin logo for "${coinName}", small, futuristic, referencing palette ${colorPalette}, shimmering effect vibe.`;
+      const logoResp = await openai.createImage({
         prompt: logoPrompt,
         n: 1,
         size: "256x256"
       });
-      const logoUrl = logoResponse.data.data[0].url;
-
+      const logoUrl = logoResp.data.data[0].url;
       const logoFetch = await fetch(logoUrl);
       const logoBuffer = await logoFetch.arrayBuffer();
-      placeholders["IMAGE_PLACEHOLDER_LOGO"] = `data:image/png;base64,${Buffer.from(logoBuffer).toString('base64')}`;
+      placeholders["IMAGE_PLACEHOLDER_LOGO"] = "data:image/png;base64," + Buffer.from(logoBuffer).toString('base64');
     } catch (err) {
       console.error("Logo generation error:", err);
       placeholders["IMAGE_PLACEHOLDER_LOGO"] = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAUAAAAFCAYAAACNbyblAAAAHElEQVQIW2Nk+M+ACzFEFwoKMvClX6BAsAwAGgGFu6+opmQAAAABJRU5ErkJggg==";
     }
 
-    // (B) HERO BG
+    // (B) BG
     progressMap[requestId].progress = 60;
     try {
-      const bgPrompt = `${projectDesc || "memecoin"} hero background referencing color palette "${colorPalette}", futuristic, bold, eye-catching`;
-      const bgResponse = await openai.createImage({
+      const bgPrompt = `${projectDesc || "memecoin"} hero background referencing palette "${colorPalette}", futuristic, bold, shimmering/gradient, comedic or edgy vibes.`;
+      const bgResp = await openai.createImage({
         prompt: bgPrompt,
         n: 1,
         size: "256x256"
       });
-      const bgUrl = bgResponse.data.data[0].url;
-
+      const bgUrl = bgResp.data.data[0].url;
       const bgFetch = await fetch(bgUrl);
       const bgBuffer = await bgFetch.arrayBuffer();
-      placeholders["IMAGE_PLACEHOLDER_BG"] = `data:image/png;base64,${Buffer.from(bgBuffer).toString('base64')}`;
+      placeholders["IMAGE_PLACEHOLDER_BG"] = "data:image/png;base64," + Buffer.from(bgBuffer).toString('base64');
     } catch (err) {
       console.error("BG generation error:", err);
       placeholders["IMAGE_PLACEHOLDER_BG"] = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAUAAAAFCAYAAACNbyblAAAAHElEQVQIW2Nk+M+ACzFEFwoKMvClX6BAsAwAGgGFu6+opmQAAAABJRU5ErkJggg==";
@@ -238,19 +247,21 @@ async function doWebsiteGeneration(requestId, userInputs) {
 
     progressMap[requestId].progress = 80;
 
-    // 4) Replace placeholders in the GPT code
-    Object.keys(placeholders).forEach((phKey) => {
+    // Replace placeholders
+    Object.keys(placeholders).forEach(phKey => {
       const base64Uri = placeholders[phKey];
       const regex = new RegExp(phKey, 'g');
       siteCode = siteCode.replace(regex, base64Uri);
     });
 
+    // Remove triple backticks
+    siteCode = siteCode.replace(/```+/g, '');
+
     progressMap[requestId].progress = 90;
 
-    // 5) Save final code, set status = done
     progressMap[requestId].code = siteCode;
-    progressMap[requestId].progress = 100;
     progressMap[requestId].status = 'done';
+    progressMap[requestId].progress = 100;
 
   } catch (error) {
     console.error("Error in background generation:", error);
@@ -260,9 +271,9 @@ async function doWebsiteGeneration(requestId, userInputs) {
 }
 
 /**************************************************
- * Launch the Server
+ * Launch
  **************************************************/
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
-  console.log(`KasperCoin Website Builder API running on port ${PORT} (GPT-4o)!`);
+  console.log(`KasperCoin Website Builder API running on port ${PORT} with GPT-4o!`);
 });
