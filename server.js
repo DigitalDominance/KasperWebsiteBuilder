@@ -168,7 +168,7 @@ Produce a single-page highly advanced beautiful HTML/CSS/JS site based on kasper
 4) Tokenomics: heading, then 3 cards laid out horizontally. nice clean animations and crisp gradients.
 5) Footer at bottom (non-sticky), disclaimers, IMAGE_PLACEHOLDER_LOGO etc. 
    - Must appear at end of page content (not pinned/sticky).
-6) Use advanced styling: shimmer, transitions, your colorPalette for gradients. 
+6) Use advanced styling: shimmer, transitions, your colorPalette for gradients. Fully desktop and mobile responsive.
    - Absolutely incorporate the colorPalette in the main backgrounds or sections
 7) Images must relate to coinName & projectDesc (and used in DALL·E prompts).
 8) No leftover code fences or triple backticks. 
@@ -198,10 +198,10 @@ make sure to include all the final beautiful html css js. quality is the most im
     progressMap[requestId].progress = 20;
 
     const gptResponse = await openai.createChatCompletion({
-      model: "gpt-4o",
+      model: "o1-mini",
       messages: [
         { role: "system", content: systemMessage },
-        { role: "user", content: "Generate the single-file site now, strictly following colorPalette, non-sticky nav/footer, 3 token cards, vertical roadmap timeline, no leftover code fences." }
+        { role: "user", content: "Generate the single-file site now, strictly following colorPalette, non-sticky nav/footer, 3 token cards, vertical roadmap timeline, no leftover code fences. beautiful styling. responsive. modern" }
       ],
       max_tokens: 3500,
       temperature: 0.9
