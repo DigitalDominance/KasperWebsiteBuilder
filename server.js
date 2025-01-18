@@ -241,6 +241,7 @@ Produce a single-page highly advanced and beautiful HTML/CSS/JS site based on ka
 8) **Output Format**
    - No leftover code fences or triple backticks.
    - Output in ONE file with:
+     ```html
      <!DOCTYPE html>
      <html>
        <head>
@@ -257,7 +258,7 @@ Produce a single-page highly advanced and beautiful HTML/CSS/JS site based on ka
          <script> ... any needed JS ... </script>
        </body>
      </html>
-
+     ```
    - Make sure to include all the final beautiful HTML, CSS, and JS. Quality is the most important thing.
 
 Use the snippet below as partial inspiration (but do not include code fences in your output):
