@@ -11,7 +11,7 @@ const app = express();
  * Restrict CORS to https://www.kaspercoin.net/websitebuilder only
  */
 const corsOptions = {
-  origin: "https://www.kaspercoin.net/websitebuilder",
+  origin: "https://www.kaspercoin.net",
   methods: ["GET", "POST", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization"],
 };
