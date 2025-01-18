@@ -23,7 +23,7 @@ app.use(bodyParser.json());
 
 // OpenAI config
 const configuration = new Configuration({
-  apiKey: process.env.OPENAI_API_KEY,
+  apiKey: process.env.OPENAI_API_KEY, // Must be a valid key with access to "gpt-4o-mini" or your custom model
 });
 const openai = new OpenAIApi(configuration);
 
@@ -37,6 +37,11 @@ app.get('/', (req, res) => {
 
 /**
  * POST /generate-website-code
+ *
+ * userInputs:
+ *  - coinName
+ *  - colorPalette
+ *  - imagePrompts (array of strings)
  */
 app.post('/generate-website-code', async (req, res) => {
   try {
@@ -45,8 +50,10 @@ app.post('/generate-website-code', async (req, res) => {
       return res.status(400).json({ error: "Please provide 'coinName' and 'colorPalette' in userInputs." });
     }
 
-    // GPT prompt
-    const prompt = `
+    const numberOfPlaceholders = userInputs.imagePrompts?.length || 0;
+
+    // We'll embed your old instructions as a single "system" message
+    const systemInstructions = `
       You are a coding AI specialized in building fun, memecoin-style websites,
       strongly inspired by kaspercoin.net. The user wants a fully responsive
       single-page site for a coin/project called "${userInputs.coinName}" 
@@ -64,7 +71,7 @@ app.post('/generate-website-code', async (req, res) => {
          - Possibly a "Join the community" or typical memecoin vibe.
 
       Also include any other normal memecoin elements (like fun slogans or branding lines).
-      Use placeholders in the form of:
+      Use placeholders in the form:
       <img src="IMAGE_PLACEHOLDER_{n}" alt="image" />
       for each image, e.g. IMAGE_PLACEHOLDER_1, IMAGE_PLACEHOLDER_2, etc.
 
@@ -72,26 +79,39 @@ app.post('/generate-website-code', async (req, res) => {
       - HTML, CSS (and minimal JS if needed) in one file.
       - Must be fully responsive across all devices.
       - Well-commented code.
-      - There should be ${userInputs.imagePrompts.length || 0} placeholders total (match the user's requested images).
-
+      - There should be ${numberOfPlaceholders} placeholders total (match the user's requested images).
+      
       Output only valid HTML/CSS/JS, with no extra explanation.
     `;
 
-    // 1) Generate the site code from GPT
-    const gptResponse = await openai.createCompletion({
-      model: "text-davinci-003",
-      prompt,
+    // We make a ChatCompletion call to "gpt-4o-mini" (custom model)
+    // If you don't actually have that model, you'll get an error from OpenAI
+    const chatResponse = await openai.createChatCompletion({
+      model: "gpt-4o-mini", // custom or fine-tuned model name
+      messages: [
+        {
+          role: "system",
+          content: systemInstructions
+        },
+        // Optionally, add a user message if you want more context or direct user input:
+        {
+          role: "user",
+          content: "Generate the website code now."
+        }
+      ],
       max_tokens: 2000,
       temperature: 0.8
     });
-    let generatedCode = gptResponse.data.choices[0].text.trim();
+
+    // The code is in the "content" of the assistant's message
+    let generatedCode = chatResponse.data.choices[0].message.content.trim();
 
     // 2) DALL·E image generation + base64 embedding
     const imageUrls = [];
     if (Array.isArray(userInputs.imagePrompts) && userInputs.imagePrompts.length > 0) {
       for (let i = 0; i < userInputs.imagePrompts.length; i++) {
-        const description = userInputs.imagePrompts[i];
-        const finalImagePrompt = `${description}, in a crypto memecoin style, referencing kaspercoin.net aesthetics, trending on artstation, 4k`;
+        const promptDescription = userInputs.imagePrompts[i];
+        const finalImagePrompt = `${promptDescription}, in a crypto memecoin style, referencing kaspercoin.net aesthetics, trending on artstation, 4k`;
 
         try {
           const imageResponse = await openai.createImage({
@@ -101,7 +121,7 @@ app.post('/generate-website-code', async (req, res) => {
           });
           const dallEUrl = imageResponse.data.data[0].url;
 
-          // Fetch the image, convert to base64
+          // Convert to base64
           const imageFetch = await fetch(dallEUrl);
           const imageBuffer = await imageFetch.arrayBuffer();
           const base64Data = Buffer.from(imageBuffer).toString('base64');
@@ -110,13 +130,13 @@ app.post('/generate-website-code', async (req, res) => {
 
         } catch (err) {
           console.error("Error generating/fetching image:", err);
-          // fallback placeholder
+          // fallback
           imageUrls.push("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMAAAAAwCAYAAABLWConAAAAAElFTkSuQmCC");
         }
       }
     }
 
-    // 3) Replace placeholders
+    // 3) Replace IMAGE_PLACEHOLDER_n with actual base64 URIs
     imageUrls.forEach((base64Uri, i) => {
       const placeholder = `IMAGE_PLACEHOLDER_${i+1}`;
       const regex = new RegExp(placeholder, 'g');
