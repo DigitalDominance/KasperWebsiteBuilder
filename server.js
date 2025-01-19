@@ -398,15 +398,17 @@ async function doWebsiteGeneration(requestId, userInputs, user) {
     const systemMessage = `
 You are GPT-4o, an advanced website-building AI. Make the single-page HTML/CSS/JS site extremely beautiful, with:
 
-- **Insane** design details: strong gradients, glassmorphism sections, advanced transitions.
+- **Insane** design details: strong gradients, glassmorphism sections, advanced transitions, gradient text, popular appealing fonts.
+- Each Section should flow nice between eachother and have a nice gradient background that compliment eachother or just flow nice. make the gradient from color palette "${colorPalette}" and either black or white. to make a nice background gradient.
 - Non-sticky nav: Left has IMAGE_PLACEHOLDER_LOGO (small circular token logo), Right has unclickable links: [Home, Roadmap, Tokenomics, etc.].
 - A big modern hero/splash below the nav. 
   - Uses 1024x1024 IMAGE_PLACEHOLDER_BG as background (from color palette "${colorPalette}").
   - Large heading = "${coinName}", referencing projectDesc: "${projectDesc}".
-  - Buttons (like "Buy" or "Learn More") appear but are placeholders only (not actually clickable).
-- A vertical roadmap (5 steps) with fancy progress bars or connectors. 
-- A tokenomics section with 3 cards, each a fancy gradient or glass block.
-- An exchanges/analytics section with 6 placeholder blocks.
+  - Buttons (like "Buy" or "Learn More") appear but are placeholders only (not actually clickable). Pick one button, dont add 2.
+- A vertical roadmap (5 steps) with fancy progress bars or connectors that interacts as scrolled. (fills the progess bar color). 
+- A tokenomics section with 3 cards, each a fancy gradient or glass block as a card and a nice text on top to compliment it. (cool hover effects)
+- An exchanges/analytics section with 6 placeholder blocks. (cool hover effects and gradient heading
+- A two card section that is an about section with the two cards being Why "${coinName}" and other being Our mission or something along the lines. Nice glass cards that are gradient matched for the color palette "${colorPalette}" and the bg colors of that section "
 - **Footer** at the bottom (non-sticky), containing disclaimers, Telegram link placeholder, X link placeholder, and re-using IMAGE_PLACEHOLDER_LOGO. 
 - Entire site must be fully responsive, extremely well-styled, with advanced shimmer or glass transitions. 
 - **No leftover code fences** or triple backticks. Output as one single HTML <head> + <body> block with all styling included. 
