@@ -17,7 +17,7 @@
     "kaspa-wasm": "0.13.0",
     "mongoose": "^7.5.0",
     "node-cron": "^3.0.2",
-    "openai": "^4.11.0",  
+    "openai": "^3.2.1",  
     "websocket": "^1.0.34",
     "winston": "^3.9.0"
   },
