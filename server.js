@@ -489,7 +489,7 @@ You are GPT-4o, an advanced website-building AI. Create a single-page HTML/CSS/J
   2) Big hero with a blurred bg image with "HERO_BG_PLACEHOLDER" (1024x1024). Must show coin name "${coinName}" and reference "${projectDesc}".
   3) a heading and subheading component and then under a Vertical roadmap (5 steps), . Fancy. make sure their width is fitting to the screen size.
   4) a heading and subheading component and then Tokenomics with 3 fancy gradient/glass cards. under the heading not next to. laid out horizontally on computer taking up a a whole row of screen or on mobile vertically laid out"
-  5) a heading and subheading component and then Exchange/analytics with 6 placeholders (laid out nicely). under the heading.  2 rows, 3 columns on computer that take up the whole section of the screen and, vertical layout for mobile. under the heading.
+  5) a heading and subheading component and then Exchange/analytics with 6 placeholders (laid out nicely). under the heading.  2 rows, 3 columns on computer that take up  wide enough not so skinny it only takes up one part we need the whole section of the screen and, vertical layout for mobile. under the heading.
   6) a heading and subheadin 2-card about section, .under the heading not next to and then the cards laid out horizontally and big enough to take up the whole section spacenot stacked. 
   7) footer section at the bottom not sticky. uses FOOTER_IMAGE_PLACEHOLDER on the left and on the right it uses placeholder social links that dont work
 - Buttons are placeholders only. Not clickable.
@@ -548,8 +548,8 @@ Must suit both nav & footer, pick black/white for best contrast.`;
     // Generate 1024x1024 hero background
     try {
       progressMap[requestId].progress = 55;
-      const bgPrompt = `1024x1024 mainly black or white with some color from the pallete background dont make the subject of the image big make it small like very zoomed out 10% of the screen so it looks good on the bg of a site. (decide whats better for black or white from the pallete) its an image for a memecoin hero section on a website called "${coinName}", referencing "${projectDesc}", color palette: "${colorPalette}", pick black/white for main color contrast. Very futuristic.`;
-      const bgResp = await openai.createImage({ prompt: bgPrompt, n:1, size:"1024x1024" });
+      const bgPrompt = `1024x1024  a ${colorPalette} gradient with either black or white. u decide with fits better. make a small refrence to this character on a small section of the image"${coinName}"`;
+      const bgResp = await openai.createImage({ model: "dall-e-3", prompt: bgPrompt, n:1, size:"1024x1024" });
       const bgUrl = bgResp.data.data[0].url;
       const bgFetch = await fetch(bgUrl);
       const bgBuffer = await bgFetch.arrayBuffer();
