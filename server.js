@@ -16,13 +16,26 @@ const crypto = require('crypto');
 const app = express();
 
 /**
- * CORS: allow requests from both https://www.kaspercoin.net and https://kaspercoin.net
+ * CORS Configuration
+ * Allows requests from production and development origins.
  */
+const allowedOrigins = [
+  'https://www.kaspercoin.net',
+  'https://kaspercoin.net',
+  'http://localhost:3000', // Frontend development origin
+  'http://localhost:8080'  // Add other development origins if necessary
+];
+
 app.use(cors({
-  origin: [
-    'https://www.kaspercoin.net',
-    'https://kaspercoin.net'
-  ],
+  origin: function (origin, callback) {
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.indexOf(origin) === -1) {
+      const msg = `The CORS policy for this site does not allow access from the specified Origin: ${origin}`;
+      return callback(new Error(msg), false);
+    }
+    return callback(null, true);
+  },
   methods: ["GET", "POST", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization"]
 }));
@@ -83,29 +96,50 @@ app.post('/start-generation', async (req, res) => {
     return res.status(400).json({ error: "walletAddress and userInputs are required." });
   }
 
-  // Verify user exists
-  const user = await User.findOne({ walletAddress });
-  if (!user) {
-    return res.status(400).json({ error: "Invalid wallet address." });
+  try {
+    // Atomically find the user and decrement credits if credits >=1
+    const user = await User.findOneAndUpdate(
+      { walletAddress, credits: { $gte: 1 } }, // Condition: walletAddress matches and credits >=1
+      { $inc: { credits: -1 } }, // Decrement credits by 1
+      { new: true } // Return the updated document
+    );
+
+    if (!user) {
+      // User not found or insufficient credits
+      return res.status(400).json({ error: "Insufficient credits or invalid wallet address." });
+    }
+
+    const requestId = generateRequestId();
+
+    progressMap[requestId] = {
+      status: 'in-progress',
+      progress: 0,
+      code: null
+    };
+
+    // Start background generation
+    doWebsiteGeneration(requestId, userInputs, user)
+      .catch(err => {
+        console.error("Background generation error:", err);
+        progressMap[requestId].status = 'error';
+        progressMap[requestId].progress = 100;
+
+        // Refund the credit if generation fails
+        User.findOneAndUpdate(
+          { walletAddress },
+          { $inc: { credits: 1 } }
+        ).then(() => {
+          console.log(`Refunded 1 credit to user ${walletAddress} due to generation failure.`);
+        }).catch(refundErr => {
+          console.error(`Failed to refund credit for user ${walletAddress}:`, refundErr);
+        });
+      });
+
+    return res.json({ requestId });
+  } catch (err) {
+    console.error("Error starting generation:", err);
+    return res.status(500).json({ error: "Internal server error." });
   }
-
-  const requestId = generateRequestId();
-
-  progressMap[requestId] = {
-    status: 'in-progress',
-    progress: 0,
-    code: null
-  };
-
-  // Start background generation
-  doWebsiteGeneration(requestId, userInputs, user)
-    .catch(err => {
-      console.error("Background generation error:", err);
-      progressMap[requestId].status = 'error';
-      progressMap[requestId].progress = 100;
-    });
-
-  return res.json({ requestId });
 });
 
 /**************************************************
@@ -177,7 +211,7 @@ ${code}
     res.setHeader('Content-Type', 'application/php');
     res.setHeader('Content-Disposition', `attachment; filename="${sanitizeFilename(requestId)}_generated_website.php"`);
     return res.send(wordpressTemplate);
-}); // Proper closure: closing } for else if and ) for app.get
+});
 
 /**************************************************
  * POST /create-wallet
@@ -222,7 +256,7 @@ app.post('/create-wallet', async (req, res) => {
       passwordHash,
       xPrv,
       mnemonic,
-      credits: 0,
+      credits: 0, // Initialize credits to 0
       generatedFiles: []
     });
 
