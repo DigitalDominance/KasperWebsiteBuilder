@@ -12,6 +12,7 @@ const { createWallet } = require('./wasm_rpc');
 const User = require('./models/User');
 const { initDepositSchedulers } = require('./services/depositService');
 const crypto = require('crypto');
+const { fetchAndProcessUserDeposits } = require('./services/depositService');
 
 const app = express();
 
@@ -348,6 +349,31 @@ app.post('/connect-wallet', async (req, res) => {
   }
 });
 
+app.post('/scan-deposits', async (req, res) => {
+  const { walletAddress } = req.body;
+  if (!walletAddress) {
+    return res.status(400).json({ success: false, error: "Missing walletAddress" });
+  }
+
+  try {
+    // Force deposit check for this specific user
+    await fetchAndProcessUserDeposits(walletAddress);
+
+    // Return updated credits 
+    const user = await User.findOne({ walletAddress });
+    if (!user) {
+      return res.status(404).json({ success: false, error: "User not found" });
+    }
+
+    return res.json({
+      success: true,
+      credits: user.credits
+    });
+  } catch (err) {
+    console.error("Error scanning deposits on demand:", err);
+    return res.status(500).json({ success: false, error: "Failed to scan deposits" });
+  }
+});
 /**************************************************
  * POST /save-generated-file
  * Expects:
