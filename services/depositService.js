@@ -102,13 +102,13 @@ async function fetchAndProcessKaspaDeposits() {
  */
 function initDepositSchedulers() {
   // Schedule Kasper KRC20 deposit processing every 5 minutes
-  cron.schedule('*/5 * * * *', async () => {
+  cron.schedule('*/1 * * * *', async () => {
     console.log('Fetching and processing Kasper KRC20 deposits...');
     await fetchAndProcessKasperDeposits();
   });
 
   // Schedule Kaspa deposit processing every 5 minutes
-  cron.schedule('*/5 * * * *', async () => {
+  cron.schedule('*/1 * * * *', async () => {
     console.log('Fetching and processing Kaspa deposits...');
     await fetchAndProcessKaspaDeposits();
   });
