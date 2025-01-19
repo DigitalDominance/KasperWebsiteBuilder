@@ -8,22 +8,23 @@ const mongoose = require('mongoose');
 const bcrypt = require('bcrypt');
 const crypto = require('crypto');
 
+// Your local modules:
 const { createWallet } = require('./wasm_rpc');
-const User = require('./models/User');  // Make sure this includes your GeneratedFileSchema
-// Only importing fetchAndProcessUserDeposits (no initDepositSchedulers).
+const User = require('./models/User'); // Must include your GeneratedFileSchema inside the User model
+// We keep only the deposit scanning function, not the scheduler.
 const { fetchAndProcessUserDeposits } = require('./services/depositService');
 
 const app = express();
 
 /**
  * CORS Configuration
- * Allows requests from production and development origins.
+ * Allows requests from these production/dev origins.
  */
 const allowedOrigins = [
   'https://www.kaspercoin.net',
   'https://kaspercoin.net',
-  'http://localhost:3000',  // Frontend dev
-  'http://localhost:8080'   // Additional dev
+  'http://localhost:3000',
+  'http://localhost:8080'
 ];
 
 app.use(cors({
@@ -115,7 +116,7 @@ app.post('/start-generation', async (req, res) => {
       progressMap[requestId].status = 'error';
       progressMap[requestId].progress = 100;
 
-      // Refund credit
+      // Refund credit if generation fails
       User.findOneAndUpdate({ walletAddress }, { $inc: { credits: 1 } })
         .then(() => {
           console.log(`Refunded 1 credit to ${walletAddress} due to generation failure.`);
@@ -265,7 +266,7 @@ app.post('/create-wallet', async (req, res) => {
       passwordHash,
       xPrv,
       mnemonic,
-      credits: 1, // give 1 free credit
+      credits: 1,
       generatedFiles: []
     });
 
@@ -296,7 +297,7 @@ app.post('/connect-wallet', async (req, res) => {
       return res.status(400).json({ success: false, error: "Invalid wallet address or password." });
     }
 
-    // Password check
+    // password check
     const passwordMatch = await bcrypt.compare(password, user.passwordHash);
     if (!passwordMatch) {
       return res.status(400).json({ success: false, error: "Invalid wallet address or password." });
@@ -326,7 +327,7 @@ app.post('/scan-deposits', async (req, res) => {
   }
 
   try {
-    // Just call the function from depositService - no schedulers
+    // On-demand deposit check
     await fetchAndProcessUserDeposits(walletAddress);
 
     const user = await User.findOne({ walletAddress });
@@ -372,7 +373,7 @@ app.post('/save-generated-file', async (req, res) => {
 
 /**************************************************
  * GET /get-user-generations?walletAddress=XYZ
- * Returns the user's generation files for the History Embed
+ * Streams large arrays to avoid timeouts
  **************************************************/
 app.get('/get-user-generations', async (req, res) => {
   const { walletAddress } = req.query;
@@ -383,8 +384,7 @@ app.get('/get-user-generations', async (req, res) => {
   console.log("→ /get-user-generations => walletAddress:", walletAddress);
 
   try {
-    // Use .lean() so Mongoose doesn't create full document objects.
-    // This speeds up access and uses less memory.
+    // Use .lean() for faster, smaller docs
     const user = await User.findOne({ walletAddress }).lean();
     console.log("   Found user =>", user ? user._id : "None");
 
@@ -395,12 +395,11 @@ app.get('/get-user-generations', async (req, res) => {
     const files = user.generatedFiles || [];
     console.log("   user.generatedFiles length:", files.length);
 
-    // Stream out the JSON in chunks to reduce chance of timeout if it's huge
+    // Start streaming JSON
     res.setHeader('Content-Type', 'application/json');
     req.setTimeout(0);
     res.setTimeout(0);
 
-    // Start writing
     res.write('{"success":true,"generatedFiles":[');
 
     for (let i = 0; i < files.length; i++) {
@@ -415,15 +414,15 @@ app.get('/get-user-generations', async (req, res) => {
         res.write(',');
       }
 
+      // Write each file object
       res.write(JSON.stringify(fileObj));
-      // yield control briefly for large loops
+
+      // Let the event loop process other tasks (helpful with huge arrays)
       await new Promise(resolve => setImmediate(resolve));
     }
 
-    // finish JSON
     res.write(']}');
     res.end();
-
   } catch (err) {
     console.error("Error in get-user-generations:", err);
     return res.status(500).json({ success: false, error: "Internal server error." });
@@ -442,6 +441,7 @@ async function doWebsiteGeneration(requestId, userInputs, user) {
 
     progressMap[requestId].progress = 10;
 
+    // Inspiration snippet (partial code for shimmer, etc.)
     const snippetInspiration = `
 <html>
 <head>
@@ -456,6 +456,10 @@ async function doWebsiteGeneration(requestId, userInputs, user) {
       background-size: 200% 200%;
       animation: shimmerMove 2s infinite;
     }
+    @keyframes shimmerMove {
+      0% { background-position: -200% 0; }
+      100% { background-position: 200% 0; }
+    }
   </style>
 </head>
 <body>
@@ -463,9 +467,20 @@ async function doWebsiteGeneration(requestId, userInputs, user) {
 </body>
 </html>
 `;
+
+    // Big GPT system instructions with disclaimers for insane design, color palette, etc.
     const systemMessage = `
-You are GPT-4o, an advanced website-building AI...
-(Truncated for brevity)...
+You are GPT-4o, an advanced website-building AI. Make the single-page HTML/CSS/JS site extremely beautiful, with:
+
+- **Insane** design details: fully responsive, strong gradients, glassmorphism sections, advanced transitions, gradient text, appealing fonts, etc.
+- Use color palette "${colorPalette}" plus black or white for high contrast.
+- Non-sticky nav with placeholders. For mobile, show a dropdown. For desktop, show links horizontally.
+- A big hero with a 1024x1024 image placeholder background, large heading with "${coinName}", referencing: "${projectDesc}".
+- Buttons are placeholders only; they do nothing on click.
+- A vertical roadmap (5 steps), a tokenomics section with 3 fancy cards, an exchanges section with 6 placeholders, and a two-card "About" section.
+- A footer with disclaimers, Telegram placeholder, X placeholder, plus a small logo.
+- Everything must be in one <head> + <body> block, fully responsive, with advanced styling/animations.
+- **No leftover code fences**. Replace IMAGE_PLACEHOLDER_LOGO (256x256) and IMAGE_PLACEHOLDER_BG (1024x1024) with base64 data.
 
 Use snippet below for partial inspiration (no code fences):
 ${snippetInspiration}
@@ -473,14 +488,14 @@ ${snippetInspiration}
 
     progressMap[requestId].progress = 20;
 
-    // Generate with GPT
+    // Make GPT call
     const gptResponse = await openai.createChatCompletion({
       model: "gpt-4o",
       messages: [
         { role: "system", content: systemMessage },
         {
           role: "user",
-          content: `Generate the single-file site now... colorPalette: ${colorPalette}, coinName: ${coinName}, projectDesc: ${projectDesc}.`
+          content: `Generate the single-file site now. Must have insane design, transitions, advanced glass, placeholders for Telegram & X in the footer. colorPalette: ${colorPalette}, coinName: ${coinName}, projectDesc: ${projectDesc}. No leftover code fences.`
         }
       ],
       max_tokens: 3500,
@@ -490,12 +505,15 @@ ${snippetInspiration}
     let siteCode = gptResponse.data.choices[0].message.content.trim();
     progressMap[requestId].progress = 40;
 
+    // Prepare placeholders
     const placeholders = {};
 
     // Generate the token logo (256x256)
     progressMap[requestId].progress = 50;
     try {
-      const logoPrompt = `Transparent circular token logo, 256x256, for a memecoin called "${coinName}". Color palette: "${colorPalette}". Eye-catching.`;
+      const logoPrompt = `Transparent circular token logo, 256x256, for a memecoin called "${coinName}". 
+Color palette: "${colorPalette}", vibe: ${projectDesc}.
+Must be eye-catching, no extra text/background.`;
       const logoResp = await openai.createImage({
         prompt: logoPrompt,
         n: 1,
@@ -508,14 +526,15 @@ ${snippetInspiration}
         "data:image/png;base64," + Buffer.from(logoBuffer).toString("base64");
     } catch (err) {
       console.error("Logo generation error:", err);
+      // fallback
       placeholders["IMAGE_PLACEHOLDER_LOGO"] =
         "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAUAAAAFCAYAAACNbyblAAAAHElEQVQI12Nk+M+ACzFEFwoKMvClX6BAsAwAGgGFu6+opmQAAAABJRU5ErkJggg==";
     }
 
-    // BG hero (1024x1024)
+    // Generate the hero BG (1024x1024)
     progressMap[requestId].progress = 60;
     try {
-      const bgPrompt = `1024x1024 advanced gradient/shimmer background for a memecoin hero called "${coinName}", color palette: "${colorPalette}".`;
+      const bgPrompt = `1024x1024 advanced gradient/shimmer background for a memecoin hero called "${coinName}", color palette: "${colorPalette}" & black/white, referencing: ${projectDesc}. Extremely nice.`;
       const bgResp = await openai.createImage({
         prompt: bgPrompt,
         n: 1,
@@ -528,6 +547,7 @@ ${snippetInspiration}
         "data:image/png;base64," + Buffer.from(bgBuffer).toString("base64");
     } catch (err) {
       console.error("BG generation error:", err);
+      // fallback
       placeholders["IMAGE_PLACEHOLDER_BG"] =
         "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAUAAAAFCAYAAACNbyblAAAAHElEQVQI12Nk+M+ACzFEFwoKMvClX6BAsAwAGgGFu6+opmQAAAABJRU5ErkJggg==";
     }
@@ -541,11 +561,12 @@ ${snippetInspiration}
       siteCode = siteCode.replace(regex, base64Uri);
     }
 
+    // remove leftover triple backticks
     siteCode = siteCode.replace(/```+/g, "");
 
     progressMap[requestId].progress = 90;
     progressMap[requestId].code = siteCode;
-    progressMap[requestId].status = 'done';
+    progressMap[requestId].status = "done";
     progressMap[requestId].progress = 100;
 
     // Save final code to user's generated files
@@ -555,7 +576,6 @@ ${snippetInspiration}
       generatedAt: new Date()
     });
     await user.save();
-
   } catch (error) {
     console.error("Error in background generation:", error);
     progressMap[requestId].status = "error";
