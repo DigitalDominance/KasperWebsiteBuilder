@@ -378,18 +378,21 @@ app.get('/get-user-generations', async (req, res) => {
     return res.status(400).json({ success: false, error: "Missing walletAddress." });
   }
 
-  try {
-    // For debugging, you can log:
-    // console.log("GET /get-user-generations => walletAddress:", walletAddress);
+  // *** Debug logs to confirm we're hitting this route & what we find
+  console.log("→ /get-user-generations => walletAddress:", walletAddress);
 
+  try {
     const user = await User.findOne({ walletAddress });
+    console.log("   Found user:", user ? user._id : "None");
+
     if (!user) {
       return res.status(404).json({ success: false, error: "User not found." });
     }
 
-    // Return all generatedFiles (requestId, content, generatedAt, etc.)
-    return res.json({ 
-      success: true, 
+    // Return all generatedFiles
+    // If the content is large, it might appear truncated in console, but it's in the JSON
+    return res.json({
+      success: true,
       generatedFiles: user.generatedFiles.map(f => ({
         requestId: f.requestId,
         content: f.content,
