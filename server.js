@@ -398,7 +398,7 @@ async function doWebsiteGeneration(requestId, userInputs, user) {
     const systemMessage = `
 You are GPT-4o, an advanced website-building AI. Make the single-page HTML/CSS/JS site extremely beautiful, with:
 
-- **Insane** design details: strong gradients, glassmorphism sections, advanced transitions, gradient text, popular appealing fonts.
+- **Insane** design details: strong gradients, glassmorphism sections, advanced transitions, gradient text, popular appealing fonts. Black or white should be added as a primary with their chosen color pallette.
 - Each Section should flow nice between eachother and have a nice gradient background that compliment eachother or just flow nice. make the gradient from color palette "${colorPalette}" and either black or white. to make a nice background gradient.
 - Non-sticky nav: Left has IMAGE_PLACEHOLDER_LOGO (small circular token logo), Right has unclickable links: [Home, Roadmap, Tokenomics, etc.].
 - A big modern hero/splash below the nav. 
@@ -407,7 +407,7 @@ You are GPT-4o, an advanced website-building AI. Make the single-page HTML/CSS/J
   - Buttons (like "Buy" or "Learn More") appear but are placeholders only (not actually clickable). Pick one button, dont add 2.
 - A vertical roadmap (5 steps) with fancy progress bars or connectors that interacts as scrolled. (fills the progess bar color). 
 - A tokenomics section with 3 cards, each a fancy gradient or glass block as a card and a nice text on top to compliment it. (cool hover effects)
-- An exchanges/analytics section with 6 placeholder blocks. (cool hover effects and gradient heading
+- An exchanges/analytics section with 6 placeholder blocks. (cool hover effects and gradient headings) give it a flex hero layout. on desktop should be 3 in each row with 2 rows. on mobile u decide.
 - A two card section that is an about section with the two cards being Why "${coinName}" and other being Our mission or something along the lines. Nice glass cards that are gradient matched for the color palette "${colorPalette}" and the bg colors of that section "
 - **Footer** at the bottom (non-sticky), containing disclaimers, Telegram link placeholder, X link placeholder, and re-using IMAGE_PLACEHOLDER_LOGO. 
 - Entire site must be fully responsive, extremely well-styled, with advanced shimmer or glass transitions. 
@@ -468,7 +468,7 @@ ${snippetInspiration}
     progressMap[requestId].progress = 60;
     try {
       const bgPrompt = `1024x1024 advanced gradient/shimmer background for a memecoin hero section called "${coinName}", 
-                        color palette: "${colorPalette}", referencing ${projectDesc}, 
+                        color palette: "${colorPalette}" and black or white as a primary, referencing ${projectDesc}, 
                         futuristic, extremely nice, consistent with project vibe. 
                         This is the main hero splash background. 
                         Must match coin name & color.`;
