@@ -211,7 +211,8 @@ ${code}
     res.setHeader('Content-Type', 'application/php');
     res.setHeader('Content-Disposition', `attachment; filename="${sanitizeFilename(requestId)}_generated_website.php"`);
     return res.send(wordpressTemplate);
-});
+  }
+}); // <-- Correct closure: closing } for else if and ) for app.get
 
 /**************************************************
  * POST /create-wallet
@@ -567,6 +568,21 @@ Now generate the final code in one fully mobile and desktop responsive beautiful
  * Initialize Deposit Schedulers
  **************************************************/
 initDepositSchedulers();
+
+/**************************************************
+ * Error Handling Middleware
+ **************************************************/
+app.use((err, req, res, next) => {
+  if (err instanceof SyntaxError) { // Handle Syntax Errors
+    console.error("Syntax Error:", err);
+    return res.status(400).json({ error: "Invalid JSON payload." });
+  } else if (err.message && err.message.startsWith('The CORS policy')) { // Handle CORS Errors
+    console.error("CORS Error:", err.message);
+    return res.status(403).json({ error: err.message });
+  }
+  console.error("Unhandled Error:", err.stack);
+  res.status(500).json({ error: "Something went wrong!" });
+});
 
 /**************************************************
  * Launch the Server
