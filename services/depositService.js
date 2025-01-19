@@ -4,8 +4,7 @@ const axios = require('axios');
 const cron = require('node-cron');
 const User = require('../models/User');
 
-// Define conversion rates
-// => 1 credit = 1 KAS, 1 credit = 800 KASPER
+// 1 credit = 1 KAS, and 1 credit = 1/800 KASPER
 const CREDIT_CONVERSION = {
   KAS: 1 / 1,      // 1 credit per 1 KAS
   KASPER: 1 / 800  // 1 credit per 800 KASPER
@@ -15,7 +14,7 @@ const CREDIT_CONVERSION = {
  * Fetch and process KRC20 (KASPER) transactions for a single user.
  */
 async function processUserKasperDeposits(user) {
-  // If somehow processedTransactions is missing, define it as an array
+  // Make sure processedTransactions is at least an array
   if (!Array.isArray(user.processedTransactions)) {
     user.processedTransactions = [];
   }
@@ -25,7 +24,8 @@ async function processUserKasperDeposits(user) {
 
   try {
     const response = await axios.get(url);
-    // If we don't get a successful message, skip
+
+    // If not "successful", skip
     if (response.data.message !== "successful") {
       console.error(`Unexpected KASPER response for wallet ${walletAddress}:`, response.data);
       return;
@@ -33,35 +33,38 @@ async function processUserKasperDeposits(user) {
 
     const transactions = response.data.result || [];
     for (const tx of transactions) {
-      const hashRev = tx.hashRev;        // unique ID for KRC20 transfer
-      const amt = parseInt(tx.amt, 10) / 1e8; // from sompi to KAS-like units
+      const hashRev = tx.hashRev;
+      const amt = parseInt(tx.amt, 10) / 1e8; // KAS-likes from sompi
       const opType = tx.op;
       const toAddress = tx.to;
 
-      // Check if it's a deposit not yet processed
+      // Check if not processed
       const alreadyProcessed = user.processedTransactions.some(
         (t) => t.txid === hashRev
       );
 
-      // Must be "transfer" to this user address, not processed yet
+      // Must be "transfer" and to this wallet
       if (
         opType.toLowerCase() === "transfer" &&
         toAddress === walletAddress &&
         !alreadyProcessed
       ) {
+        // 1 credit = 1/800 KASPER => multiply amt by (1/800)
         const creditsToAdd = amt * CREDIT_CONVERSION.KASPER;
         user.credits += creditsToAdd;
 
-        // Record the TX in the user's processedTransactions
+        // Save
         user.processedTransactions.push({
           txid: hashRev,
           coinType: "KASPER",
-          amount: amt,            // how many KASPER (1 "amt" here is KAS-likes, effectively)
+          amount: amt,
           creditsAdded: creditsToAdd,
           timestamp: new Date()
         });
 
-        console.log(`Credited ${creditsToAdd.toFixed(8)} credits to user ${user.username} from KASPER tx ${hashRev}`);
+        console.log(
+          `Credited ${creditsToAdd.toFixed(8)} credits to user ${user.username} from KASPER tx ${hashRev}`
+        );
       }
     }
   } catch (err) {
@@ -70,30 +73,32 @@ async function processUserKasperDeposits(user) {
 }
 
 /**
- * Fetch and process Kaspa (KAS) transactions for a single user.
+ * Fetch and process Kaspa (KAS) transactions for a single user using
+ * the new "full-transactions" endpoint.
  */
 async function processUserKaspaDeposits(user) {
-  // Ensure user.processedTransactions is an array
+  // Ensure processedTransactions is an array
   if (!Array.isArray(user.processedTransactions)) {
     user.processedTransactions = [];
   }
 
-  const kaspaAddress = user.walletAddress; // e.g. "kaspa:qqk..."
-  // The "full-transactions-page" endpoint can vary. We can use "limit=50" or "limit=100" as you prefer:
-  const url = `https://api.kaspa.org/addresses/${kaspaAddress}/full-transactions-page?limit=50&fields=resolve_previous_outpoints`;
+  const kaspaAddress = user.walletAddress; 
+  // NEW endpoint:
+  // GET /addresses/{kaspaAddress}/full-transactions?limit=50&offset=0&resolve_previous_outpoints=no
+  const url = `https://api.kaspa.org/addresses/${kaspaAddress}/full-transactions?limit=50&offset=0&resolve_previous_outpoints=no`;
 
   try {
     const response = await axios.get(url);
-    const transactions = response.data || [];
+    // According to docs, we get an array of tx objects
+    const transactions = Array.isArray(response.data) ? response.data : [];
 
     for (const tx of transactions) {
       const txHash = tx.hash;
       if (!tx.outputs || tx.outputs.length === 0) continue;
 
-      // Sum up all outputs that pay to user
+      // Sum all outputs that pay to user
       let sumToUser = 0;
       for (const out of tx.outputs) {
-        // If the output's address matches user's address, add it
         if (out.script_public_key_address === kaspaAddress) {
           // out.amount is in sompi => 1 KAS = 1e8 sompi
           const outKas = parseInt(out.amount, 10) / 1e8;
@@ -102,26 +107,27 @@ async function processUserKaspaDeposits(user) {
       }
 
       if (sumToUser > 0) {
-        // Check if we have processed this txHash
+        // Check if not processed
         const alreadyProcessed = user.processedTransactions.some(
           (t) => t.txid === txHash
         );
 
         if (!alreadyProcessed) {
-          // 1 KAS = 1 credit => multiply sumToUser by 1
+          // 1 KAS => 1 credit
           const creditsToAdd = sumToUser * CREDIT_CONVERSION.KAS;
           user.credits += creditsToAdd;
 
-          // Save the transaction to user's DB record
           user.processedTransactions.push({
             txid: txHash,
             coinType: "KAS",
-            amount: sumToUser,       // KAS
+            amount: sumToUser,
             creditsAdded: creditsToAdd,
             timestamp: new Date()
           });
 
-          console.log(`Credited ${creditsToAdd.toFixed(8)} credits to user ${user.username} from KAS tx ${txHash}`);
+          console.log(
+            `Credited ${creditsToAdd.toFixed(8)} credits to user ${user.username} from KAS tx ${txHash}`
+          );
         }
       }
     }
@@ -131,7 +137,7 @@ async function processUserKaspaDeposits(user) {
 }
 
 /**
- * Process KASPER & KAS deposits for a single user immediately.
+ * On-demand: Process KASPER & KAS deposits for a single user.
  */
 async function fetchAndProcessUserDeposits(walletAddress) {
   const user = await User.findOne({ walletAddress });
@@ -139,8 +145,9 @@ async function fetchAndProcessUserDeposits(walletAddress) {
     throw new Error(`User not found for wallet ${walletAddress}`);
   }
 
-  // Process KASPER & KAS for this user
+  // 1) KASPER
   await processUserKasperDeposits(user);
+  // 2) KAS
   await processUserKaspaDeposits(user);
 
   // Save
@@ -148,7 +155,7 @@ async function fetchAndProcessUserDeposits(walletAddress) {
 }
 
 /**
- * Process KASPER for ALL users
+ * Process KASPER for ALL users.
  */
 async function fetchAndProcessAllUsersKasper() {
   const users = await User.find({});
@@ -159,7 +166,7 @@ async function fetchAndProcessAllUsersKasper() {
 }
 
 /**
- * Process KAS for ALL users
+ * Process KAS for ALL users.
  */
 async function fetchAndProcessAllUsersKaspa() {
   const users = await User.find({});
@@ -170,17 +177,16 @@ async function fetchAndProcessAllUsersKaspa() {
 }
 
 /**
- * Initialize deposit processing schedules.
- * => Called from server.js at startup
+ * Cron-based deposit checks, every 1 minute.
  */
 function initDepositSchedulers() {
-  // KASPER every 1 minute
+  // KASPER
   cron.schedule('*/1 * * * *', async () => {
     console.log('Fetching and processing KASPER deposits for all users...');
     await fetchAndProcessAllUsersKasper();
   });
 
-  // KAS every 1 minute
+  // KAS
   cron.schedule('*/1 * * * *', async () => {
     console.log('Fetching and processing KAS deposits for all users...');
     await fetchAndProcessAllUsersKaspa();
