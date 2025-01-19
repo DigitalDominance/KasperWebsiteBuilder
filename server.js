@@ -225,6 +225,11 @@ Produce a single-page highly advanced and beautiful HTML/CSS/JS site based on ka
    - Heading for Tokenomics.
    - Exactly 3 cards laid out vertically with clean animations and crisp gradients.
 
+4.1) **Exchanges/Analytics Section***
+    -6 card section that has a heading above it.
+    - each card has an exchange or anayltics platform to find their token on
+    -use placeholders
+
 5) **Footer at Bottom (Non-Sticky)**
    - Contains disclaimers, social links, etc.
    - Includes IMAGE_PLACEHOLDER_LOGO.
@@ -263,7 +268,7 @@ Use the snippet below as partial inspiration (but do not include code fences in 
 
 ${snippetInspiration}
 
-Now generate the final code in ONE beautiful block with all HTML, CSS, and JS included.
+Now generate the final code in one fully mobile and desktop responsive beautiful block with all HTML, CSS, and JS included.
 `;
 
     progressMap[requestId].progress = 20;
