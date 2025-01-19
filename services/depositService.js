@@ -112,9 +112,7 @@ async function fetchAndProcessUserDeposits(walletAddress) {
   await user.save();
 }
 
-/**
- * Cron-based logic: processes all users every 1 minute (*/1 * * * *).
- */
+
 async function fetchAndProcessAllUsersKasper() {
   const users = await User.find({});
   for (const user of users) {
