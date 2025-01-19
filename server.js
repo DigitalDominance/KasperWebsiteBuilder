@@ -178,7 +178,7 @@ ${code}
     res.setHeader('Content-Disposition', `attachment; filename="${sanitizeFilename(requestId)}_generated_website.php"`);
     return res.send(wordpressTemplate);
   }
-}); // Corrected closure
+}); // Proper closure: closing } for else if and ) for app.get
 
 /**************************************************
  * POST /create-wallet
