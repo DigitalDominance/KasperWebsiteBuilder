@@ -5,10 +5,9 @@ const mongoose = require('mongoose');
 // Track any website generation
 const GeneratedFileSchema = new mongoose.Schema({
   requestId: { type: String, required: true },
-  generatedAt: { type: Date, default: Date.now },
-  content: { type: String, required: true } // Stores generated HTML content
+  content: { type: String, required: true },
+  generatedAt: { type: Date, default: Date.now }
 });
-
 // Track processed deposit transactions (KAS/KASPER)
 const ProcessedTransactionSchema = new mongoose.Schema({
   txid: { type: String, required: true },  // e.g. the KAS or KASPER TX hash
