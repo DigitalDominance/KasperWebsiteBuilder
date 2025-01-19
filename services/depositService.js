@@ -138,8 +138,7 @@ async function fetchAndProcessUserDeposits(walletAddress) {
 /**
  * initDepositSchedulers() => Disabled or minimal scanning
  */
-function initDepositSchedulers() {
-  console.log("Deposit schedulers disabled. Using on-demand scanning only.");
+
   // If you want minimal scanning, you could do e.g. once daily:
   // cron.schedule('0 0 * * *', async () => {
   //   console.log('Daily deposit check for all users...');
@@ -150,9 +149,8 @@ function initDepositSchedulers() {
   //     await user.save();
   //   }
   // });
-}
+
 
 module.exports = {
-  initDepositSchedulers,
   fetchAndProcessUserDeposits
 };
