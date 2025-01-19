@@ -378,32 +378,67 @@ app.get('/get-user-generations', async (req, res) => {
     return res.status(400).json({ success: false, error: "Missing walletAddress." });
   }
 
-  // *** Debug logs to confirm we're hitting this route & what we find
   console.log("→ /get-user-generations => walletAddress:", walletAddress);
 
   try {
-    const user = await User.findOne({ walletAddress });
-    console.log("   Found user:", user ? user._id : "None");
+    // Use .lean() so Mongoose doesn't create full document objects.
+    // This speeds up access and uses less memory.
+    const user = await User.findOne({ walletAddress }).lean();
+    console.log("   Found user =>", user ? user._id : "None");
 
     if (!user) {
       return res.status(404).json({ success: false, error: "User not found." });
     }
 
-    // Return all generatedFiles
-    // If the content is large, it might appear truncated in console, but it's in the JSON
-    return res.json({
-      success: true,
-      generatedFiles: user.generatedFiles.map(f => ({
+    const files = user.generatedFiles || [];
+    console.log("   user.generatedFiles length:", files.length);
+
+    // Set response content type to JSON
+    // We'll manually write out our JSON structure in pieces
+    res.setHeader('Content-Type', 'application/json');
+
+    // Optionally disable Node's built-in timeouts (though Heroku's 30s limit is separate)
+    req.setTimeout(0);
+    res.setTimeout(0);
+
+    // Start writing the JSON object
+    // We'll write: { "success": true, "generatedFiles": [
+    res.write('{"success":true,"generatedFiles":[');
+
+    for (let i = 0; i < files.length; i++) {
+      const f = files[i];
+      // We’ll build a small JSON object for each file
+      const fileObj = {
         requestId: f.requestId,
         content: f.content,
         generatedAt: f.generatedAt
-      }))
-    });
+      };
+
+      // Add a comma if this is not the first item
+      if (i > 0) {
+        res.write(',');
+      }
+
+      // Write out the JSON for this file
+      res.write(JSON.stringify(fileObj));
+
+      // Give the event loop a chance to handle other things
+      // This helps ensure we don't block the entire 30s if the data is huge
+      // (Optional, but can help with large loops)
+      await new Promise(resolve => setImmediate(resolve));
+    }
+
+    // Finish the JSON array and object
+    res.write(']}');
+    // End the response
+    res.end();
+
   } catch (err) {
     console.error("Error in get-user-generations:", err);
     return res.status(500).json({ success: false, error: "Internal server error." });
   }
 });
+
 
 /**************************************************
  * Background Generation Function
