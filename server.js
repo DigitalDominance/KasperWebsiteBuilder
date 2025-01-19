@@ -488,8 +488,8 @@ You are GPT-4o, an advanced website-building AI. Create a single-page HTML/CSS/J
   2) Big hero with "HERO_BG_PLACEHOLDER" (1024x1024). Must show coin name "${coinName}" and reference "${projectDesc}".
   3) Vertical roadmap (5 steps), each under the heading. Fancy. make sure their width is fitting to the screen size.
   4) Tokenomics with 3 fancy gradient/glass cards. under the header. laid out horizontally on computer taking up a a whole row of screen or on mobile vertically laid out"
-  5) Exchange/analytics with 6 placeholders (laid out nicely). under the header.  2 rows, 3 columns on computer, vertical layout for mobile.
-  6) 2-card about section, .under the header laid our horizontally. 
+  5) Exchange/analytics with 6 placeholders (laid out nicely). under the heading.  2 rows, 3 columns on computer that take up the whole section of the screen and, vertical layout for mobile.
+  6) 2-card about section, .under the heading laid out horizontally and big enough to take up the whole section spacenot stacked. 
   7) footer section at the bottom not sticky. uses FOOTER_IMAGE_PLACEHOLDER on the left and on the right it uses placeholder social links that dont work
 - Buttons are placeholders only. Not clickable.
 - every element must be thought to match/contrast with the other elements and make sure their is a nice flow. 
