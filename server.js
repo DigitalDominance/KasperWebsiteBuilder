@@ -211,8 +211,8 @@ ${code}
     res.setHeader('Content-Type', 'application/php');
     res.setHeader('Content-Disposition', `attachment; filename="${sanitizeFilename(requestId)}_generated_website.php"`);
     return res.send(wordpressTemplate);
-} // <-- Added closing brace for 'else if'
-}); // <-- Closing parenthesis for 'app.get'
+  }
+});
 
 /**************************************************
  * POST /create-wallet
@@ -250,14 +250,14 @@ app.post('/create-wallet', async (req, res) => {
     const saltRounds = 10;
     const passwordHash = await bcrypt.hash(password, saltRounds);
 
-    // Create new user
+    // Create new user with 1 free credit
     const newUser = new User({
       username,
       walletAddress: receivingAddress,
       passwordHash,
       xPrv,
       mnemonic,
-      credits: 0, // Initialize credits to 0
+      credits: 1, // Initialize credits to 1 (free credit)
       generatedFiles: []
     });
 
