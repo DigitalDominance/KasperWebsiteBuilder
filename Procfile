@@ -1,2 +1,2 @@
-web: node backend/server.js
-worker: node backend/wasm_rpc.js
+web: node server.js
+worker: node wasm_rpc.js
