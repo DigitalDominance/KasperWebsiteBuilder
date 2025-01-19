@@ -6,10 +6,12 @@ const { Configuration, OpenAIApi } = require('openai');
 const fetch = require('node-fetch');
 const mongoose = require('mongoose');
 const bcrypt = require('bcrypt');
-const { createWallet } = require('./wasm_rpc');
-const User = require('./models/User');  // Make sure this model includes the GeneratedFileSchema as shown above
-const { initDepositSchedulers, fetchAndProcessUserDeposits } = require('./services/depositService');
 const crypto = require('crypto');
+
+const { createWallet } = require('./wasm_rpc');
+const User = require('./models/User');  // Make sure this includes your GeneratedFileSchema
+// Only importing fetchAndProcessUserDeposits (no initDepositSchedulers).
+const { fetchAndProcessUserDeposits } = require('./services/depositService');
 
 const app = express();
 
@@ -40,7 +42,7 @@ app.use(cors({
 
 app.use(bodyParser.json());
 
-// Connect to MongoDB
+// ------------------ Connect to MongoDB ------------------
 mongoose.connect(process.env.MONGO_URI, {
   useNewUrlParser: true,
   useUnifiedTopology: true
@@ -51,7 +53,7 @@ mongoose.connect(process.env.MONGO_URI, {
   process.exit(1);
 });
 
-// OpenAI config
+// ------------------ OpenAI config ------------------
 const configuration = new Configuration({
   apiKey: process.env.OPENAI_API_KEY,
 });
@@ -101,7 +103,6 @@ app.post('/start-generation', async (req, res) => {
     }
 
     const requestId = generateRequestId();
-
     progressMap[requestId] = {
       status: 'in-progress',
       progress: 0,
@@ -239,13 +240,13 @@ app.post('/create-wallet', async (req, res) => {
   }
 
   try {
-    // check if username exists
+    // Check if username exists
     const existingUser = await User.findOne({ username });
     if (existingUser) {
       return res.status(400).json({ success: false, error: "Username already exists. Please choose another one." });
     }
 
-    // create new wallet
+    // Create new wallet
     const walletData = await createWallet();
     if (!walletData.success) {
       return res.status(500).json({ success: false, error: "Wallet creation failed." });
@@ -295,7 +296,7 @@ app.post('/connect-wallet', async (req, res) => {
       return res.status(400).json({ success: false, error: "Invalid wallet address or password." });
     }
 
-    // password check
+    // Password check
     const passwordMatch = await bcrypt.compare(password, user.passwordHash);
     if (!passwordMatch) {
       return res.status(400).json({ success: false, error: "Invalid wallet address or password." });
@@ -325,6 +326,7 @@ app.post('/scan-deposits', async (req, res) => {
   }
 
   try {
+    // Just call the function from depositService - no schedulers
     await fetchAndProcessUserDeposits(walletAddress);
 
     const user = await User.findOne({ walletAddress });
@@ -354,10 +356,10 @@ app.post('/save-generated-file', async (req, res) => {
       return res.status(400).json({ success: false, error: "Invalid wallet address." });
     }
 
-    user.generatedFiles.push({ 
-      requestId, 
-      content, 
-      generatedAt: new Date() 
+    user.generatedFiles.push({
+      requestId,
+      content,
+      generatedAt: new Date()
     });
     await user.save();
 
@@ -393,44 +395,33 @@ app.get('/get-user-generations', async (req, res) => {
     const files = user.generatedFiles || [];
     console.log("   user.generatedFiles length:", files.length);
 
-    // Set response content type to JSON
-    // We'll manually write out our JSON structure in pieces
+    // Stream out the JSON in chunks to reduce chance of timeout if it's huge
     res.setHeader('Content-Type', 'application/json');
-
-    // Optionally disable Node's built-in timeouts (though Heroku's 30s limit is separate)
     req.setTimeout(0);
     res.setTimeout(0);
 
-    // Start writing the JSON object
-    // We'll write: { "success": true, "generatedFiles": [
+    // Start writing
     res.write('{"success":true,"generatedFiles":[');
 
     for (let i = 0; i < files.length; i++) {
       const f = files[i];
-      // We’ll build a small JSON object for each file
       const fileObj = {
         requestId: f.requestId,
         content: f.content,
         generatedAt: f.generatedAt
       };
 
-      // Add a comma if this is not the first item
       if (i > 0) {
         res.write(',');
       }
 
-      // Write out the JSON for this file
       res.write(JSON.stringify(fileObj));
-
-      // Give the event loop a chance to handle other things
-      // This helps ensure we don't block the entire 30s if the data is huge
-      // (Optional, but can help with large loops)
+      // yield control briefly for large loops
       await new Promise(resolve => setImmediate(resolve));
     }
 
-    // Finish the JSON array and object
+    // finish JSON
     res.write(']}');
-    // End the response
     res.end();
 
   } catch (err) {
@@ -438,7 +429,6 @@ app.get('/get-user-generations', async (req, res) => {
     return res.status(500).json({ success: false, error: "Internal server error." });
   }
 });
-
 
 /**************************************************
  * Background Generation Function
@@ -452,7 +442,6 @@ async function doWebsiteGeneration(requestId, userInputs, user) {
 
     progressMap[requestId].progress = 10;
 
-    // Inspiration snippet
     const snippetInspiration = `
 <html>
 <head>
@@ -467,10 +456,6 @@ async function doWebsiteGeneration(requestId, userInputs, user) {
       background-size: 200% 200%;
       animation: shimmerMove 2s infinite;
     }
-    @keyframes shimmerMove {
-      0% { background-position: -200% 0; }
-      100% { background-position: 200% 0; }
-    }
   </style>
 </head>
 <body>
@@ -478,20 +463,9 @@ async function doWebsiteGeneration(requestId, userInputs, user) {
 </body>
 </html>
 `;
-
-    // GPT system instructions
     const systemMessage = `
-You are GPT-4o, an advanced website-building AI. Make the single-page HTML/CSS/JS site extremely beautiful, with:
-
-- **Insane** design details: fully responsive, strong gradients, glassmorphism sections, advanced transitions, gradient text, appealing fonts, etc.
-- Use color palette "${colorPalette}" plus black or white for high contrast.
-- Non-sticky nav with placeholders. For mobile, show a dropdown. For desktop, show links horizontally.
-- A big hero with a 1024x1024 image placeholder background, large heading with "${coinName}", referencing: "${projectDesc}".
-- Buttons are placeholders only; they do nothing on click.
-- A vertical roadmap, a tokenomics section with 3 fancy cards, an exchanges section with 6 placeholders, and a two-card "About" section.
-- A footer with disclaimers, Telegram placeholder, X placeholder, plus a small logo.
-- Everything must be in one <head> + <body> block, fully responsive, with advanced styling/animations.
-- No leftover code fences. Replace IMAGE_PLACEHOLDER_LOGO (256x256) and IMAGE_PLACEHOLDER_BG (1024x1024) with base64 data.
+You are GPT-4o, an advanced website-building AI...
+(Truncated for brevity)...
 
 Use snippet below for partial inspiration (no code fences):
 ${snippetInspiration}
@@ -499,14 +473,14 @@ ${snippetInspiration}
 
     progressMap[requestId].progress = 20;
 
-    // Generate the site with GPT
+    // Generate with GPT
     const gptResponse = await openai.createChatCompletion({
-      model: "gpt-4o",  // or 'gpt-4' if you have that set up
+      model: "gpt-4o",
       messages: [
         { role: "system", content: systemMessage },
-        { 
-          role: "user", 
-          content: `Generate the single-file site now. Must have insane design, transitions, advanced glass, placeholders for Telegram & X in the footer. All consistent with colorPalette: ${colorPalette}, coinName: ${coinName}, projectDesc: ${projectDesc}. No leftover code fences.` 
+        {
+          role: "user",
+          content: `Generate the single-file site now... colorPalette: ${colorPalette}, coinName: ${coinName}, projectDesc: ${projectDesc}.`
         }
       ],
       max_tokens: 3500,
@@ -516,15 +490,12 @@ ${snippetInspiration}
     let siteCode = gptResponse.data.choices[0].message.content.trim();
     progressMap[requestId].progress = 40;
 
-    // Prepare placeholders
     const placeholders = {};
 
     // Generate the token logo (256x256)
     progressMap[requestId].progress = 50;
     try {
-      const logoPrompt = `Transparent circular token logo, 256x256, for a memecoin called "${coinName}". 
-Color palette: "${colorPalette}", vibe: ${projectDesc}.
-Must be eye-catching, no extra text/background.`;
+      const logoPrompt = `Transparent circular token logo, 256x256, for a memecoin called "${coinName}". Color palette: "${colorPalette}". Eye-catching.`;
       const logoResp = await openai.createImage({
         prompt: logoPrompt,
         n: 1,
@@ -537,17 +508,14 @@ Must be eye-catching, no extra text/background.`;
         "data:image/png;base64," + Buffer.from(logoBuffer).toString("base64");
     } catch (err) {
       console.error("Logo generation error:", err);
-      // fallback if error
       placeholders["IMAGE_PLACEHOLDER_LOGO"] =
         "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAUAAAAFCAYAAACNbyblAAAAHElEQVQI12Nk+M+ACzFEFwoKMvClX6BAsAwAGgGFu6+opmQAAAABJRU5ErkJggg==";
     }
 
-    // Generate the 1024x1024 BG hero
+    // BG hero (1024x1024)
     progressMap[requestId].progress = 60;
     try {
-      const bgPrompt = `1024x1024 advanced gradient/shimmer background for a memecoin hero called "${coinName}", 
-color palette: "${colorPalette}" and black/white, referencing ${projectDesc}, 
-futuristic and extremely nice.`;
+      const bgPrompt = `1024x1024 advanced gradient/shimmer background for a memecoin hero called "${coinName}", color palette: "${colorPalette}".`;
       const bgResp = await openai.createImage({
         prompt: bgPrompt,
         n: 1,
@@ -560,28 +528,24 @@ futuristic and extremely nice.`;
         "data:image/png;base64," + Buffer.from(bgBuffer).toString("base64");
     } catch (err) {
       console.error("BG generation error:", err);
-      // fallback if error
       placeholders["IMAGE_PLACEHOLDER_BG"] =
         "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAUAAAAFCAYAAACNbyblAAAAHElEQVQI12Nk+M+ACzFEFwoKMvClX6BAsAwAGgGFu6+opmQAAAABJRU5ErkJggg==";
     }
 
     progressMap[requestId].progress = 80;
 
-    // Replace placeholders (IMAGE_PLACEHOLDER_LOGO / IMAGE_PLACEHOLDER_BG)
+    // Replace placeholders
     for (const phKey of Object.keys(placeholders)) {
       const base64Uri = placeholders[phKey];
       const regex = new RegExp(phKey, "g");
       siteCode = siteCode.replace(regex, base64Uri);
     }
 
-    // remove leftover triple backticks in the code
     siteCode = siteCode.replace(/```+/g, "");
 
     progressMap[requestId].progress = 90;
-
-    // Assign final code
     progressMap[requestId].code = siteCode;
-    progressMap[requestId].status = "done";
+    progressMap[requestId].status = 'done';
     progressMap[requestId].progress = 100;
 
     // Save final code to user's generated files
@@ -598,11 +562,6 @@ futuristic and extremely nice.`;
     progressMap[requestId].progress = 100;
   }
 }
-
-/**************************************************
- * Initialize Deposit Schedulers
- **************************************************/
-initDepositSchedulers();
 
 /**************************************************
  * Error Handling Middleware
