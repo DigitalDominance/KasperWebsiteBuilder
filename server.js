@@ -472,18 +472,27 @@ async function doWebsiteGeneration(requestId, userInputs, user) {
 </html>
 `;
 
-    // GPT system message: references nav, hero, footer placeholders
+    // GPT system message: 
+    //  - Only ONE 256x256 "nav/footer" token logo => "NAV_IMAGE_PLACEHOLDER" and "FOOTER_IMAGE_PLACEHOLDER" are the same
+    //  - A 1024x1024 hero => "HERO_BG_PLACEHOLDER"
+    //  - Must pick black or white background for the page for better contrast with colorPalette
+    //  - Must have 6 cards for exchanges, vertical roadmap (5 steps), tokenomics (3 fancy cards), a 2-card about section, disclaimers
+    //  - Fully responsive, advanced transitions, glass sections, gradient text, etc.
     const systemMessage = `
-You are GPT-4o, an advanced website-building AI. 
-Please produce a single-page HTML/CSS/JS site with these requirements:
+You are GPT-4o, an advanced website-building AI. Create a single-page HTML/CSS/JS site:
 
-- "Insane" design, advanced gradients from color palette "${colorPalette}" plus black or white for strong contrast.
-- A nav with a 256x256 logo placeholder => "NAV_IMAGE_PLACEHOLDER".
-- A large hero with background => "HERO_BG_PLACEHOLDER" (1024x1024).
-- A footer with brand image => "FOOTER_IMAGE_PLACEHOLDER" (256x256).
-- Also includes vertical roadmap, tokenomics, exchange placeholders, about section, disclaimers, etc.
-- Fully responsive, advanced transitions, glassmorphism, gradient text, nice spacing, etc.
-- Buttons are placeholders only, do nothing on click.
+- Use color palette "${colorPalette}" plus either white or black for the main background, whichever contrasts best.
+- Make all sections fully responsive with strong spacing, advanced transitions, glassmorphism, gradient text, etc.
+- Separate sections in this order:
+  1) Nav (non-sticky) with a 256x256 transparent token logo => "NAV_IMAGE_PLACEHOLDER" (also repeated in footer as "FOOTER_IMAGE_PLACEHOLDER", same image). 
+  2) Big hero with "HERO_BG_PLACEHOLDER" (1024x1024). Must show coin name "${coinName}" and reference "${projectDesc}".
+  3) Vertical roadmap (5 steps), each under the heading. Fancy. 
+  4) Tokenomics with 3 fancy gradient/glass cards. under the header.
+  5) Exchange/analytics with 6 placeholders (laid out nicely). under the header.
+  6) 2-card about section, .under the header
+  7) footer section at the bottom not sticky. uses FOOTER_IMAGE_PLACEHOLDER
+- Buttons are placeholders only. Not clickable.
+- Contrasting color scheme, picking black or white background to complement "${colorPalette}".
 - No leftover code fences.
 
 Use snippet below for partial inspiration (no code fences):
@@ -499,7 +508,7 @@ ${snippetInspiration}
         { role: "system", content: systemMessage },
         {
           role: "user",
-          content: `Create the single-file site now with placeholders: NAV_IMAGE_PLACEHOLDER, HERO_BG_PLACEHOLDER, FOOTER_IMAGE_PLACEHOLDER. Must be extremely beautiful, advanced glass, colorPalette: ${colorPalette}, coinName: ${coinName}, projectDesc: ${projectDesc}. No leftover code fences.`
+          content: `Generate the single-file site now with placeholders: NAV_IMAGE_PLACEHOLDER, HERO_BG_PLACEHOLDER, FOOTER_IMAGE_PLACEHOLDER. Must be insanely beautiful, advanced glass, colorPalette: ${colorPalette}, coinName: ${coinName}, projectDesc: ${projectDesc}. No leftover code fences.`
         }
       ],
       max_tokens: 3500,
@@ -509,76 +518,71 @@ ${snippetInspiration}
     let siteCode = gptResponse.data.choices[0].message.content.trim();
     progressMap[requestId].progress = 40;
 
-    // 2) Generate 3 images. We'll store them in memory only
+    // We'll store images in memory only (so DB doesn't bloat)
     const imagesObj = {};
 
-    // 2a) Nav Logo (256x256)
+    // Generate ONE 256x256 logo for both nav and footer
+    // (NAV_IMAGE_PLACEHOLDER and FOOTER_IMAGE_PLACEHOLDER will get the same base64)
     try {
-      const navPrompt = `256x256 nav logo for a memecoin called "${coinName}". color palette: "${colorPalette}" black/white for contrast. no extra text, just a circular token.`;
-      const navResp = await openai.createImage({ prompt: navPrompt, n:1, size:"256x256" });
-      const navUrl = navResp.data.data[0].url;
-      const navFetch = await fetch(navUrl);
-      const navBuffer = await navFetch.arrayBuffer();
-      imagesObj.navLogo = "data:image/png;base64," + Buffer.from(navBuffer).toString("base64");
-    } catch(err) {
-      console.error("Nav logo error:", err);
-      imagesObj.navLogo = "data:image/png;base64,iVBORw0K...fallback";
+      progressMap[requestId].progress = 45;
+      const logoPrompt = `256x256 transparent token logo for a memecoin called "${coinName}". 
+color palette: "${colorPalette}", 
+only the coin's circular design, no extra text or background. 
+Must suit both nav & footer, pick black/white for best contrast.`;
+      const logoResp = await openai.createImage({ prompt: logoPrompt, n:1, size:"256x256" });
+      const logoUrl = logoResp.data.data[0].url;
+      const logoFetch = await fetch(logoUrl);
+      const logoBuffer = await logoFetch.arrayBuffer();
+      const base64Logo = "data:image/png;base64," + Buffer.from(logoBuffer).toString("base64");
+      imagesObj.navLogo = base64Logo;      // for NAV_IMAGE_PLACEHOLDER
+      imagesObj.footerImg = base64Logo;    // for FOOTER_IMAGE_PLACEHOLDER
+    } catch (err) {
+      console.error("Nav/Footer logo error:", err);
+      const fallback = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAUAAAAFCAYAAACNbyblAAAAHElEQ...";
+      imagesObj.navLogo = fallback;
+      imagesObj.footerImg = fallback;
     }
 
-    progressMap[requestId].progress = 50;
-
-    // 2b) Hero BG (1024x1024)
+    // Generate 1024x1024 hero background
     try {
-      const heroPrompt = `1024x1024 gradient/shimmer BG for a memecoin hero called "${coinName}", color palette: "${colorPalette}", referencing: ${projectDesc}. must be really nice.`;
-      const heroResp = await openai.createImage({ prompt: heroPrompt, n:1, size:"1024x1024" });
-      const heroUrl = heroResp.data.data[0].url;
-      const heroFetch = await fetch(heroUrl);
-      const heroBuffer = await heroFetch.arrayBuffer();
-      imagesObj.heroBg = "data:image/png;base64," + Buffer.from(heroBuffer).toString("base64");
-    } catch(err) {
+      progressMap[requestId].progress = 55;
+      const bgPrompt = `1024x1024 gradient/shimmer background for a memecoin hero called "${coinName}", referencing "${projectDesc}", color palette: "${colorPalette}", pick black/white for main color contrast. Very futuristic.`;
+      const bgResp = await openai.createImage({ prompt: bgPrompt, n:1, size:"1024x1024" });
+      const bgUrl = bgResp.data.data[0].url;
+      const bgFetch = await fetch(bgUrl);
+      const bgBuffer = await bgFetch.arrayBuffer();
+      imagesObj.heroBg = "data:image/png;base64," + Buffer.from(bgBuffer).toString("base64");
+    } catch (err) {
       console.error("Hero BG error:", err);
-      imagesObj.heroBg = "data:image/png;base64,iVBORw0K...fallback";
+      imagesObj.heroBg = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAU...";
     }
 
     progressMap[requestId].progress = 60;
 
-    // 2c) Footer brand image (256x256)
-    try {
-      const footPrompt = `256x256 brand image for a memecoin called "${coinName}", color palette: "${colorPalette}". small minimal brand style. no text. black/white contrast.`;
-      const footResp = await openai.createImage({ prompt: footPrompt, n:1, size:"256x256" });
-      const footUrl = footResp.data.data[0].url;
-      const footFetch = await fetch(footUrl);
-      const footBuffer = await footFetch.arrayBuffer();
-      imagesObj.footerImg = "data:image/png;base64," + Buffer.from(footBuffer).toString("base64");
-    } catch(err) {
-      console.error("Footer image error:", err);
-      imagesObj.footerImg = "data:image/png;base64,iVBORw0K...fallback";
-    }
-
-    progressMap[requestId].progress = 70;
-
-    // 3) Remove leftover code fences in siteCode
+    // Remove leftover code fences
     siteCode = siteCode.replace(/```+/g, "");
 
-    // 4) DO NOT replace placeholders in siteCode here. We store placeholders in DB
+    // We do NOT replace placeholders in the DB-stored code
     progressMap[requestId].code = siteCode;
     progressMap[requestId].images = imagesObj;
     progressMap[requestId].status = "done";
     progressMap[requestId].progress = 100;
 
-    // 5) Save placeholder version to DB
+    // Save placeholder version to DB
     user.generatedFiles.push({
       requestId,
-      content: siteCode,    // placeholders remain
+      content: siteCode,  // placeholders remain in DB
       generatedAt: new Date()
     });
     await user.save();
+
   } catch (error) {
     console.error("Error in background generation:", error);
     progressMap[requestId].status = "error";
     progressMap[requestId].progress = 100;
   }
 }
+
 
 /**************************************************
  * Error Handling
