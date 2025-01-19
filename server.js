@@ -7,7 +7,7 @@ const fetch = require('node-fetch');
 const mongoose = require('mongoose');
 const bcrypt = require('bcrypt');
 const { createWallet } = require('./wasm_rpc');
-const User = require('./models/User');
+const User = require('./models/User');  // Make sure this model includes the GeneratedFileSchema as shown above
 const { initDepositSchedulers, fetchAndProcessUserDeposits } = require('./services/depositService');
 const crypto = require('crypto');
 
@@ -26,7 +26,7 @@ const allowedOrigins = [
 
 app.use(cors({
   origin: function (origin, callback) {
-    // Allow requests with no origin
+    // Allow requests with no origin (e.g. Postman)
     if (!origin) return callback(null, true);
     if (allowedOrigins.indexOf(origin) === -1) {
       const msg = `The CORS policy for this site does not allow access from ${origin}`;
@@ -80,6 +80,7 @@ app.get('/', (req, res) => {
 
 /**************************************************
  * POST /start-generation
+ * Decrements 1 credit, then spawns background site generation
  **************************************************/
 app.post('/start-generation', async (req, res) => {
   const { walletAddress, userInputs } = req.body;
@@ -132,6 +133,7 @@ app.post('/start-generation', async (req, res) => {
 
 /**************************************************
  * GET /progress?requestId=XYZ
+ * Check generation progress
  **************************************************/
 app.get('/progress', (req, res) => {
   const { requestId } = req.query;
@@ -144,6 +146,7 @@ app.get('/progress', (req, res) => {
 
 /**************************************************
  * GET /result?requestId=XYZ
+ * Retrieve final HTML once generation is done
  **************************************************/
 app.get('/result', (req, res) => {
   const { requestId } = req.query;
@@ -160,6 +163,7 @@ app.get('/result', (req, res) => {
 
 /**************************************************
  * GET /export?requestId=XYZ&type=full|wordpress
+ * Export the generated site as either full HTML or WP template
  **************************************************/
 app.get('/export', (req, res) => {
   const { requestId, type } = req.query;
@@ -226,6 +230,7 @@ app.get('/get-credits', async (req, res) => {
 
 /**************************************************
  * POST /create-wallet
+ * Creates a new user & KASPER wallet
  **************************************************/
 app.post('/create-wallet', async (req, res) => {
   const { username, password } = req.body;
@@ -259,7 +264,7 @@ app.post('/create-wallet', async (req, res) => {
       passwordHash,
       xPrv,
       mnemonic,
-      credits: 1, 
+      credits: 1, // give 1 free credit
       generatedFiles: []
     });
 
@@ -276,6 +281,7 @@ app.post('/create-wallet', async (req, res) => {
 
 /**************************************************
  * POST /connect-wallet
+ * Logs in an existing user
  **************************************************/
 app.post('/connect-wallet', async (req, res) => {
   const { walletAddress, password } = req.body;
@@ -310,6 +316,7 @@ app.post('/connect-wallet', async (req, res) => {
 
 /**************************************************
  * POST /scan-deposits
+ * On-demand check for user deposit transactions
  **************************************************/
 app.post('/scan-deposits', async (req, res) => {
   const { walletAddress } = req.body;
@@ -333,6 +340,7 @@ app.post('/scan-deposits', async (req, res) => {
 
 /**************************************************
  * POST /save-generated-file
+ * Manually save a generation (if needed)
  **************************************************/
 app.post('/save-generated-file', async (req, res) => {
   const { walletAddress, requestId, content } = req.body;
@@ -346,7 +354,6 @@ app.post('/save-generated-file', async (req, res) => {
       return res.status(400).json({ success: false, error: "Invalid wallet address." });
     }
 
-    // Push with a generatedAt timestamp
     user.generatedFiles.push({ 
       requestId, 
       content, 
@@ -362,7 +369,7 @@ app.post('/save-generated-file', async (req, res) => {
 });
 
 /**************************************************
- * NEW: GET /get-user-generations?walletAddress=XYZ
+ * GET /get-user-generations?walletAddress=XYZ
  * Returns the user's generation files for the History Embed
  **************************************************/
 app.get('/get-user-generations', async (req, res) => {
@@ -372,6 +379,9 @@ app.get('/get-user-generations', async (req, res) => {
   }
 
   try {
+    // For debugging, you can log:
+    // console.log("GET /get-user-generations => walletAddress:", walletAddress);
+
     const user = await User.findOne({ walletAddress });
     if (!user) {
       return res.status(404).json({ success: false, error: "User not found." });
@@ -431,7 +441,7 @@ async function doWebsiteGeneration(requestId, userInputs, user) {
 </html>
 `;
 
-    // GPT system instructions with disclaimers about "insanely beautiful" etc.
+    // GPT system instructions
     const systemMessage = `
 You are GPT-4o, an advanced website-building AI. Make the single-page HTML/CSS/JS site extremely beautiful, with:
 
@@ -444,7 +454,7 @@ You are GPT-4o, an advanced website-building AI. Make the single-page HTML/CSS/J
 - A footer with disclaimers, Telegram placeholder, X placeholder, plus a small logo.
 - Everything must be in one <head> + <body> block, fully responsive, with advanced styling/animations.
 - No leftover code fences. Replace IMAGE_PLACEHOLDER_LOGO (256x256) and IMAGE_PLACEHOLDER_BG (1024x1024) with base64 data.
-    
+
 Use snippet below for partial inspiration (no code fences):
 ${snippetInspiration}
 `;
@@ -453,12 +463,12 @@ ${snippetInspiration}
 
     // Generate the site with GPT
     const gptResponse = await openai.createChatCompletion({
-      model: "gpt-4o",
+      model: "gpt-4o",  // or 'gpt-4' if you have that set up
       messages: [
         { role: "system", content: systemMessage },
         { 
           role: "user", 
-          content: `Generate the single-file site now. Must have insane design, transitions, advanced glass, placeholders for Telegram & X in the footer. All consistent with colorPalette: ${colorPalette}, coinName: ${coinName}, and projectDesc: ${projectDesc}. No leftover code fences.` 
+          content: `Generate the single-file site now. Must have insane design, transitions, advanced glass, placeholders for Telegram & X in the footer. All consistent with colorPalette: ${colorPalette}, coinName: ${coinName}, projectDesc: ${projectDesc}. No leftover code fences.` 
         }
       ],
       max_tokens: 3500,
@@ -471,7 +481,7 @@ ${snippetInspiration}
     // Prepare placeholders
     const placeholders = {};
 
-    // Generate the transparent circular token logo (256x256)
+    // Generate the token logo (256x256)
     progressMap[requestId].progress = 50;
     try {
       const logoPrompt = `Transparent circular token logo, 256x256, for a memecoin called "${coinName}". 
@@ -519,14 +529,14 @@ futuristic and extremely nice.`;
 
     progressMap[requestId].progress = 80;
 
-    // Replace placeholders
+    // Replace placeholders (IMAGE_PLACEHOLDER_LOGO / IMAGE_PLACEHOLDER_BG)
     for (const phKey of Object.keys(placeholders)) {
       const base64Uri = placeholders[phKey];
       const regex = new RegExp(phKey, "g");
       siteCode = siteCode.replace(regex, base64Uri);
     }
 
-    // remove any leftover triple backticks
+    // remove leftover triple backticks in the code
     siteCode = siteCode.replace(/```+/g, "");
 
     progressMap[requestId].progress = 90;
@@ -536,7 +546,7 @@ futuristic and extremely nice.`;
     progressMap[requestId].status = "done";
     progressMap[requestId].progress = 100;
 
-    // Save to user's generated files with timestamp
+    // Save final code to user's generated files
     user.generatedFiles.push({
       requestId,
       content: siteCode,
