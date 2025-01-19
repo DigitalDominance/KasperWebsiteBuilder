@@ -211,7 +211,6 @@ ${code}
     res.setHeader('Content-Type', 'application/php');
     res.setHeader('Content-Disposition', `attachment; filename="${sanitizeFilename(requestId)}_generated_website.php"`);
     return res.send(wordpressTemplate);
-  }
 }); // <-- Correct closure: closing } for else if and ) for app.get
 
 /**************************************************
