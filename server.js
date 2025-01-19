@@ -69,6 +69,9 @@ function generateRequestId() {
   return crypto.randomBytes(8).toString('hex');
 }
 
+function sanitizeFilename(name) {
+  return name.replace(/[^a-zA-Z0-9_-]/g, '_');
+}
 /**************************************************
  * GET /
  **************************************************/
@@ -188,16 +191,18 @@ app.get('/export', (req, res) => {
     return res.status(400).json({ error: "Invalid or missing export type. Use 'full' or 'wordpress'." });
   }
 
+  const filename = sanitizeFilename(requestId);
+
   if (type === 'full') {
     // Export as full HTML file
     res.setHeader('Content-Type', 'text/html');
-    res.setHeader('Content-Disposition', `attachment; filename="${sanitizeFilename(requestId)}_website.html"`);
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}_website.html"`);
     return res.send(code);
   } else if (type === 'wordpress') {
     // Wrap the HTML into a WordPress page template
     const wordpressTemplate = `<?php
 /**
- * Template Name: ${sanitizeFilename(requestId)}_Generated_Website
+ * Template Name: ${filename}_Generated_Website
  */
 get_header(); ?>
 
@@ -209,11 +214,10 @@ ${code}
 `;
 
     res.setHeader('Content-Type', 'application/php');
-    res.setHeader('Content-Disposition', `attachment; filename="${sanitizeFilename(requestId)}_generated_website.php"`);
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}_generated_website.php"`);
     return res.send(wordpressTemplate);
   }
 });
-
 /**************************************************
  * GET /get-credits?walletAddress=XYZ
  * Securely fetches the current credits for a given wallet address.
