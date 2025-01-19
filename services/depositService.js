@@ -1,144 +1,119 @@
 // backend/services/depositService.js
 
-const fetch = require('node-fetch');
+const axios = require('axios');
+const cron = require('node-cron');
 const User = require('../models/User');
+const mongoose = require('mongoose');
+
+// Define conversion rates
+const CREDIT_CONVERSION = {
+  KAS: 1 / 5,        // 1 credit = 5 KAS
+  KASPER: 1 / 340    // 1 credit = 340 KASPER
+};
+
+// Initialize a set to store processed transaction hashes
+const processedTransactions = new Set();
 
 /**
- * Fetch KAS/KASPER deposits for a given wallet address.
- * @param {string} walletAddress
- * @returns {Array} Array of deposit transactions
+ * Fetch and process KRC20 (Kasper) transactions for all users.
  */
-async function fetchKaspasDeposits(walletAddress) {
+async function fetchAndProcessKasperDeposits() {
   try {
-    // Define currencies to monitor
-    const currencies = ['kas', 'kasper'];
+    const users = await User.find({});
+    for (const user of users) {
+      const walletAddress = user.walletAddress;
+      const url = `https://api.kasplex.org/v1/krc20/oplist?address=${walletAddress}&tick=KASPER`;
 
-    const deposits = [];
-
-    for (const currency of currencies) {
-      // Fetch transactions from Kaspa API
-      const url = `https://api.kaspa.org/addresses/${encodeURIComponent(walletAddress)}/full-transactions-page?limit=100&fields=full`;
-
-      const response = await fetch(url);
-      if (!response.ok) {
-        console.error(`Error fetching transactions for ${walletAddress}:`, response.statusText);
+      const response = await axios.get(url);
+      if (response.data.message !== "successful") {
+        console.error(`Unexpected response for wallet ${walletAddress}:`, response.data);
         continue;
       }
 
-      const data = await response.json();
+      const transactions = response.data.result || [];
+      for (const tx of transactions) {
+        const hashRev = tx.hashRev;
+        const amt = parseInt(tx.amt, 10) / 1e8; // Convert from sompi to KAS
+        const opType = tx.op;
+        const toAddress = tx.to;
 
-      for (const tx of data) {
-        // Filter for incoming transfers
-        if (tx.outputs) {
-          for (const output of tx.outputs) {
-            if (output.script_public_key_address.toLowerCase() === walletAddress.toLowerCase()) {
-              deposits.push({
-                hashRev: tx.transaction_id,
-                amount: output.amount, // Assuming amount is in the smallest unit
-                currency: currency
-              });
-            }
-          }
+        // Ensure it's a TRANSFER to the correct address and not already processed
+        if (opType.toLowerCase() === "transfer" && toAddress === walletAddress && !processedTransactions.has(hashRev)) {
+          // Credit the user's account
+          const creditsToAdd = amt * CREDIT_CONVERSION.KASPER;
+          user.credits += creditsToAdd;
+
+          // Save the transaction as processed
+          processedTransactions.add(hashRev);
+
+          console.log(`Credited ${creditsToAdd} credits to user ${user.username} from KRC20 transaction ${hashRev}`);
         }
       }
+
+      // Save the updated user
+      await user.save();
     }
-
-    return deposits;
-  } catch (err) {
-    console.error("Error fetching Kaspa deposits:", err);
-    return [];
+  } catch (error) {
+    console.error("Error fetching KRC20 transactions:", error.message);
   }
 }
 
 /**
- * Check if a transaction has already been processed.
- * @param {string} hashRev
- * @param {string} walletAddress
- * @returns {boolean}
+ * Fetch and process Kaspa (KAS) transactions for all users.
  */
-async function isTransactionProcessed(hashRev, walletAddress) {
-  // Check if any generatedFile has the requestId as hashRev
-  const user = await User.findOne({ walletAddress, 'generatedFiles.requestId': hashRev });
-  return !!user;
-}
-
-/**
- * Save a processed transaction to the user's generatedFiles to prevent reprocessing.
- * @param {string} hashRev
- * @param {number} amount
- * @param {string} currency
- * @param {string} walletAddress
- */
-async function saveTransaction(hashRev, amount, currency, walletAddress) {
-  // Add a generatedFile entry with the transaction hash
-  const user = await User.findOne({ walletAddress });
-  if (user) {
-    user.generatedFiles.push({
-      requestId: hashRev,
-      content: `Deposit of ${amount} ${currency.toUpperCase()}`
-    });
-    await user.save();
-  }
-}
-
-/**
- * Scan deposits and credit user accounts accordingly.
- * @param {string} walletAddress
- * @param {string} password
- * @returns {object} Result object with success status and credits added or error
- */
-async function scanDeposits(walletAddress, password) {
+async function fetchAndProcessKaspaDeposits() {
   try {
-    const user = await User.findOne({ walletAddress });
-    if (!user) {
-      return { success: false, error: "Invalid wallet address or password." };
-    }
+    const users = await User.find({});
+    for (const user of users) {
+      const kaspaAddress = user.walletAddress; // Assuming same as Kasper wallet
+      const url = `https://api.kaspa.org/addresses/${kaspaAddress}/full-transactions-page?limit=50&fields=resolve_previous_outpoints`;
 
-    // Compare password
-    const bcrypt = require('bcrypt');
-    const passwordMatch = await bcrypt.compare(password, user.passwordHash);
+      const response = await axios.get(url);
+      const transactions = response.data || [];
 
-    if (!passwordMatch) {
-      return { success: false, error: "Invalid wallet address or password." };
-    }
+      for (const tx of transactions) {
+        const hash = tx.hash;
+        const amount = parseInt(tx.outputs[0].amount, 10) / 1e8; // Convert from sompi to KAS
+        const toAddress = tx.outputs[0].script_public_key_address;
 
-    // Fetch transactions from Kaspa API
-    const newDeposits = await fetchKaspasDeposits(walletAddress);
+        // Ensure it's a transaction to the user's address and not already processed
+        if (toAddress === kaspaAddress && !processedTransactions.has(hash)) {
+          // Credit the user's account
+          const creditsToAdd = amount * CREDIT_CONVERSION.KAS;
+          user.credits += creditsToAdd;
 
-    let creditsAdded = 0;
+          // Save the transaction as processed
+          processedTransactions.add(hash);
 
-    for (const tx of newDeposits) {
-      const { hashRev, amount, currency } = tx;
-
-      // Check if transaction is already processed
-      const isProcessed = await isTransactionProcessed(hashRev, walletAddress);
-      if (!isProcessed) {
-        // Convert amount to credits
-        let credits = 0;
-        if (currency.toLowerCase() === 'kas') {
-          credits = Math.floor(amount / 5);
-        } else if (currency.toLowerCase() === 'kasper') {
-          credits = Math.floor(amount / 340);
-        }
-
-        if (credits > 0) {
-          // Update user's credits
-          user.credits += credits;
-          creditsAdded += credits;
-
-          // Save transaction as processed
-          await saveTransaction(hashRev, amount, currency, walletAddress);
+          console.log(`Credited ${creditsToAdd} credits to user ${user.username} from Kaspa transaction ${hash}`);
         }
       }
+
+      // Save the updated user
+      await user.save();
     }
-
-    await user.save();
-
-    return { success: true, creditsAdded };
-  } catch (err) {
-    console.error("Error scanning deposits:", err);
-    return { success: false, error: "Internal server error." };
+  } catch (error) {
+    console.error("Error fetching Kaspa transactions:", error.message);
   }
 }
 
-module.exports = { scanDeposits };
+/**
+ * Initialize deposit processing schedules.
+ */
+function initDepositSchedulers() {
+  // Schedule Kasper KRC20 deposit processing every 5 minutes
+  cron.schedule('*/5 * * * *', async () => {
+    console.log('Fetching and processing Kasper KRC20 deposits...');
+    await fetchAndProcessKasperDeposits();
+  });
+
+  // Schedule Kaspa deposit processing every 5 minutes
+  cron.schedule('*/5 * * * *', async () => {
+    console.log('Fetching and processing Kaspa deposits...');
+    await fetchAndProcessKaspaDeposits();
+  });
+
+  console.log('Deposit schedulers initialized.');
+}
+
+module.exports = { initDepositSchedulers };
