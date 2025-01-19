@@ -27,6 +27,7 @@ const allowedOrigins = [
 
 app.use(cors({
   origin: function (origin, callback) {
+    // Allow requests with no origin (e.g. Postman)
     if (!origin) return callback(null, true);
     if (allowedOrigins.indexOf(origin) === -1) {
       const msg = `The CORS policy for this site does not allow access from ${origin}`;
@@ -79,7 +80,6 @@ app.get('/', (req, res) => {
 
 /**************************************************
  * POST /start-generation
- * Decrements 1 credit and spawns background site generation
  **************************************************/
 app.post('/start-generation', async (req, res) => {
   const { walletAddress, userInputs } = req.body;
@@ -88,7 +88,7 @@ app.post('/start-generation', async (req, res) => {
   }
 
   try {
-    // Decrement 1 credit
+    // Decrement 1 credit if user has at least 1
     const user = await User.findOneAndUpdate(
       { walletAddress, credits: { $gte: 1 } },
       { $inc: { credits: -1 } },
@@ -112,7 +112,7 @@ app.post('/start-generation', async (req, res) => {
       progressMap[requestId].status = 'error';
       progressMap[requestId].progress = 100;
 
-      // Refund credit if generation fails
+      // Refund credit
       User.findOneAndUpdate({ walletAddress }, { $inc: { credits: 1 } })
         .then(() => {
           console.log(`Refunded 1 credit to ${walletAddress} due to generation failure.`);
@@ -130,7 +130,7 @@ app.post('/start-generation', async (req, res) => {
 });
 
 /**************************************************
- * GET /progress?requestId=XYZ
+ * GET /progress
  **************************************************/
 app.get('/progress', (req, res) => {
   const { requestId } = req.query;
@@ -142,7 +142,7 @@ app.get('/progress', (req, res) => {
 });
 
 /**************************************************
- * GET /result?requestId=XYZ
+ * GET /result
  **************************************************/
 app.get('/result', (req, res) => {
   const { requestId } = req.query;
@@ -158,7 +158,7 @@ app.get('/result', (req, res) => {
 });
 
 /**************************************************
- * GET /export?requestId=XYZ&type=full|wordpress
+ * GET /export
  **************************************************/
 app.get('/export', (req, res) => {
   const { requestId, type } = req.query;
@@ -201,7 +201,7 @@ ${code}
 });
 
 /**************************************************
- * GET /get-credits?walletAddress=XYZ
+ * GET /get-credits
  **************************************************/
 app.get('/get-credits', async (req, res) => {
   const { walletAddress } = req.query;
@@ -302,7 +302,6 @@ app.post('/connect-wallet', async (req, res) => {
 
 /**************************************************
  * POST /scan-deposits
- * On-demand deposit check
  **************************************************/
 app.post('/scan-deposits', async (req, res) => {
   const { walletAddress } = req.body;
@@ -354,8 +353,7 @@ app.post('/save-generated-file', async (req, res) => {
 });
 
 /**************************************************
- * GET /get-user-generations?walletAddress=XYZ
- * Streams large arrays to avoid timeouts
+ * GET /get-user-generations
  **************************************************/
 app.get('/get-user-generations', async (req, res) => {
   const { walletAddress } = req.query;
@@ -366,7 +364,7 @@ app.get('/get-user-generations', async (req, res) => {
   console.log("→ /get-user-generations => walletAddress:", walletAddress);
 
   try {
-    // .lean() for faster, smaller docs
+    // .lean() for faster/smaller docs
     const user = await User.findOne({ walletAddress }).lean();
     console.log("   Found user =>", user ? user._id : "None");
 
@@ -377,7 +375,6 @@ app.get('/get-user-generations', async (req, res) => {
     const files = user.generatedFiles || [];
     console.log("   user.generatedFiles length:", files.length);
 
-    // Start streaming JSON
     res.setHeader('Content-Type', 'application/json');
     req.setTimeout(0);
     res.setTimeout(0);
@@ -397,7 +394,6 @@ app.get('/get-user-generations', async (req, res) => {
       }
 
       res.write(JSON.stringify(fileObj));
-      // Let event loop process other tasks
       await new Promise(resolve => setImmediate(resolve));
     }
 
@@ -421,7 +417,7 @@ async function doWebsiteGeneration(requestId, userInputs, user) {
 
     progressMap[requestId].progress = 10;
 
-    // Inspiration snippet
+    // GPT system instructions...
     const snippetInspiration = `
 <html>
 <head>
@@ -436,10 +432,6 @@ async function doWebsiteGeneration(requestId, userInputs, user) {
       background-size: 200% 200%;
       animation: shimmerMove 2s infinite;
     }
-    @keyframes shimmerMove {
-      0% { background-position: -200% 0; }
-      100% { background-position: 200% 0; }
-    }
   </style>
 </head>
 <body>
@@ -448,41 +440,27 @@ async function doWebsiteGeneration(requestId, userInputs, user) {
 </html>
 `;
 
-    // Full GPT system instructions
-    // Tells GPT to use advanced gradients, strong contrast, placeholders, big hero images, etc.
     const systemMessage = `
 You are GPT-4o, an advanced website-building AI. 
 Produce a single-page HTML/CSS/JS site with these requirements:
 
-- Insanely beautiful, with advanced gradients from the color palette "${colorPalette}" plus black or white for strong contrast.
-- Glassmorphism sections, advanced transitions, gradient text, appealing fonts, and big placeholders for images.
-- The layout must be fully responsive, with a non-sticky nav on top (desktop vs. mobile style).
-- A large hero section using a 1024x1024 background image, showing the coin name "${coinName}", referencing "${projectDesc}".
-- Add placeholders for Telegram, X (Twitter) in the footer. 
-- Vertical roadmap with 5 steps. 
-- Tokenomics (3 fancy cards). 
-- An exchange / analytics section with 6 placeholders. 
-- A two-card About section. 
-- A footer disclaimers. 
-- No leftover code fences. 
-- Replace IMAGE_PLACEHOLDER_LOGO (256x256) & IMAGE_PLACEHOLDER_BG (1024x1024) with base64 data (already fetched).
-- Provide good contrast, set up color gradients from the palette, and ensure everything is laid out nicely with strong spacing. 
-- Buttons are placeholders only, do nothing on click.
-
-Use the snippet below for partial inspiration (no code fences):
+- Insanely beautiful, advanced gradients from "${colorPalette}" plus black/white for contrast.
+- Glassmorphism, advanced transitions, gradient text, appealing fonts, placeholders for Telegram & X (footer).
+- Large hero (1024x1024) referencing coin "${coinName}", desc "${projectDesc}".
+- Vertical roadmap, 3-card tokenomics, 6 placeholders for exchange/analytics, 2-card about section, disclaimers in footer.
+- No leftover code fences. Use snippet below for partial inspiration:
 ${snippetInspiration}
 `;
 
     progressMap[requestId].progress = 20;
 
-    // GPT call
     const gptResponse = await openai.createChatCompletion({
       model: "gpt-4o",
       messages: [
         { role: "system", content: systemMessage },
         {
           role: "user",
-          content: `Create the complete single-file site now. Must have insane design, transitions, advanced glass, placeholders for Telegram & X, colorPalette: ${colorPalette}, coinName: ${coinName}, projectDesc: ${projectDesc}. No leftover code fences.`
+          content: `Create the complete single-file site now with insane design, transitions, advanced glass, placeholders for images in nav hero and footer, colorPalette: ${colorPalette}, coinName: ${coinName}, projectDesc: ${projectDesc}.`
         }
       ],
       max_tokens: 3500,
@@ -492,75 +470,68 @@ ${snippetInspiration}
     let siteCode = gptResponse.data.choices[0].message.content.trim();
     progressMap[requestId].progress = 40;
 
-    // Prepare placeholders
+    // Generate & embed images => but only for immediate result
     const placeholders = {};
 
-    // Generate token logo (256x256)
+    // 256x256 logo
     progressMap[requestId].progress = 50;
     try {
-      const logoPrompt = `Transparent circular token logo, 256x256, for a memecoin called "${coinName}". 
-Use color palette: "${colorPalette}". Eye-catching, no extra text. Must be quick.`;
-      const logoResp = await openai.createImage({
-        prompt: logoPrompt,
-        n: 1,
-        size: "256x256"
-      });
+      const logoPrompt = `256x256 transparent circular logo for memecoin "${coinName}", color palette: "${colorPalette}". eye-catching, no text.`;
+      const logoResp = await openai.createImage({ prompt: logoPrompt, n: 1, size: "256x256" });
       const logoUrl = logoResp.data.data[0].url;
       const logoFetch = await fetch(logoUrl);
       const logoBuffer = await logoFetch.arrayBuffer();
-      placeholders["IMAGE_PLACEHOLDER_LOGO"] =
-        "data:image/png;base64," + Buffer.from(logoBuffer).toString("base64");
+      placeholders["IMAGE_PLACEHOLDER_LOGO"] = "data:image/png;base64," + Buffer.from(logoBuffer).toString("base64");
     } catch (err) {
       console.error("Logo generation error:", err);
-      placeholders["IMAGE_PLACEHOLDER_LOGO"] =
-        "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAUAAAAFCAYAAACNbyblAAAAHElEQVQI12Nk+M+ACzFEFwoKMvClX6BAsAwAGgGFu6+opmQAAAABJRU5ErkJggg==";
+      // fallback
+      placeholders["IMAGE_PLACEHOLDER_LOGO"] = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAUAAAAFCAYAAACNbyblAAAAHElEQVQI12Nk+M+ACzFEFwoKMvClX6BAsAwAGgGFu6+opmQAAAABJRU5ErkJggg==";
     }
 
-    // Generate hero BG (1024x1024)
+    // 1024x1024 hero BG
     progressMap[requestId].progress = 60;
     try {
-      const bgPrompt = `1024x1024 advanced gradient/shimmer background for memecoin hero called "${coinName}", color palette: "${colorPalette}" + black/white, referencing: ${projectDesc}. Must be eye-catching.`;
-      const bgResp = await openai.createImage({
-        prompt: bgPrompt,
-        n: 1,
-        size: "1024x1024"
-      });
+      const bgPrompt = `1024x1024 advanced gradient/shimmer for memecoin hero. color palette: "${colorPalette}", referencing: ${projectDesc}, black/white for strong contrast. big and nice.`;
+      const bgResp = await openai.createImage({ prompt: bgPrompt, n: 1, size: "1024x1024" });
       const bgUrl = bgResp.data.data[0].url;
       const bgFetch = await fetch(bgUrl);
       const bgBuffer = await bgFetch.arrayBuffer();
-      placeholders["IMAGE_PLACEHOLDER_BG"] =
-        "data:image/png;base64," + Buffer.from(bgBuffer).toString("base64");
+      placeholders["IMAGE_PLACEHOLDER_BG"] = "data:image/png;base64," + Buffer.from(bgBuffer).toString("base64");
     } catch (err) {
       console.error("BG generation error:", err);
-      placeholders["IMAGE_PLACEHOLDER_BG"] =
-        "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAUAAAAFCAYAAACNbyblAAAAHElEQVQI12Nk+M+ACzFEFwoKMvClX6BAsAwAGgGFu6+opmQAAAABJRU5ErkJggg==";
+      placeholders["IMAGE_PLACEHOLDER_BG"] = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAUAAAAFCAYAAACNbyblAAAAHElEQVQI12Nk+M+ACzFEFwoKMvClX6BAsAwAGgGFu6+opmQAAAABJRU5ErkJggg==";
     }
 
     progressMap[requestId].progress = 80;
 
-    // Replace placeholders
+    // Replace placeholders with base64 images
     for (const phKey of Object.keys(placeholders)) {
       const base64Uri = placeholders[phKey];
-      const regex = new RegExp(phKey, "g");
-      siteCode = siteCode.replace(regex, base64Uri);
+      const re = new RegExp(phKey, "g");
+      siteCode = siteCode.replace(re, base64Uri);
     }
 
     // Remove leftover code fences
     siteCode = siteCode.replace(/```+/g, "");
 
-    progressMap[requestId].progress = 90;
+    // The final code with images is stored in-memory for immediate retrieval
     progressMap[requestId].code = siteCode;
     progressMap[requestId].status = "done";
     progressMap[requestId].progress = 100;
 
-    // Save final code to user's DB
+    // But we remove those base64 images for the version we store in the DB
+    // So the history embed won't contain massive images.
+    const codeForHistory = siteCode.replace(/data:image\/png;base64[^"]+/g, '[IMAGES_REMOVED_IN_HISTORY]');
+
+    // Save to user DB => no huge base64
     user.generatedFiles.push({
       requestId,
-      content: siteCode,
+      content: codeForHistory,
       generatedAt: new Date()
     });
     await user.save();
 
+    console.log(`doWebsiteGeneration => Completed for ${coinName}, stored a stripped version in DB.`);
   } catch (error) {
     console.error("Error in background generation:", error);
     progressMap[requestId].status = "error";
