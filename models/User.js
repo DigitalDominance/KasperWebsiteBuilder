@@ -6,8 +6,8 @@ const userSchema = new mongoose.Schema({
   username: { type: String, required: true, unique: true },
   walletAddress: { type: String, required: true, unique: true },
   passwordHash: { type: String, required: true },
-  xPrv: { type: String, required: true }, // Directly storing xPrv
-  mnemonic: { type: String, required: true }, // Directly storing mnemonic
+  xPrv: { type: String, required: true },         // Directly storing xPrv
+  mnemonic: { type: String, required: true },     // Directly storing mnemonic
   credits: { type: Number, default: 0 },
   generatedFiles: [
     {
