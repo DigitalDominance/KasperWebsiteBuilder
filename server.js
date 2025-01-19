@@ -227,7 +227,7 @@ Produce a single-page highly advanced and beautiful HTML/CSS/JS site based on ka
 
 4.1) **Exchanges/Analytics Section***
     -6 card section that has a heading above it.
-    - each card has an exchange or anayltics platform to find their token on
+    - flex grid layout and each card has an exchange or anayltics platform to find their token on
     -use placeholders
 
 5) **Footer at Bottom (Non-Sticky)**
@@ -262,7 +262,7 @@ Produce a single-page highly advanced and beautiful HTML/CSS/JS site based on ka
          <script> ... any needed JS ... </script>
        </body>
      </html>
-   - Make sure to include all the final beautiful HTML, CSS, and JS. Quality is the most important thing.
+   - Make sure to include all the final beautiful HTML, CSS, and JS. Quality is the most important thing. add gradients from either white or black and our color pallete in the backgrounds. make it nice.
 
 Use the snippet below as partial inspiration (but do not include code fences in your output):
 
