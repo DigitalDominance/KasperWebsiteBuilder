@@ -529,7 +529,7 @@ ${snippetInspiration}
       progressMap[requestId].progress = 45;
       const logoPrompt = `256x256 transparent token logo for a memecoin called "${coinName}". 
 color palette: "${colorPalette}", 
-only the coin's circular design, no extra text or background. 
+only the coin's circular design, transparent, no extra text or background. 
 Must suit both nav & footer, pick black/white for best contrast.`;
       const logoResp = await openai.createImage({ prompt: logoPrompt, n:1, size:"256x256" });
       const logoUrl = logoResp.data.data[0].url;
@@ -548,7 +548,7 @@ Must suit both nav & footer, pick black/white for best contrast.`;
     // Generate 1024x1024 hero background
     try {
       progressMap[requestId].progress = 55;
-      const bgPrompt = `1024x1024 gradient/shimmer background for a memecoin hero called "${coinName}", referencing "${projectDesc}", color palette: "${colorPalette}", pick black/white for main color contrast. Very futuristic.`;
+      const bgPrompt = `1024x1024 gradient/shimmer background image for a memecoin hero called "${coinName}", referencing "${projectDesc}", color palette: "${colorPalette}", pick black/white for main color contrast. Very futuristic.`;
       const bgResp = await openai.createImage({ prompt: bgPrompt, n:1, size:"1024x1024" });
       const bgUrl = bgResp.data.data[0].url;
       const bgFetch = await fetch(bgUrl);
