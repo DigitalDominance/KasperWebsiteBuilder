@@ -486,11 +486,11 @@ You are GPT-4o, an advanced website-building AI. Create a single-page HTML/CSS/J
 - make sure the sections all have the content under its heading and not next to it. it keeps happening. stop doing that. a nice crisp layout. the heading should be next to the content rather above it
 - Separate sections in this order:
   1) Nav (non-sticky) with a 256x256 transparent token logo => "NAV_IMAGE_PLACEHOLDER" on the left side and on the right side some placeholder nav links that dont work. (also repeated in footer as "FOOTER_IMAGE_PLACEHOLDER", same image). 
-  2) Big hero with "HERO_BG_PLACEHOLDER" (1024x1024). Must show coin name "${coinName}" and reference "${projectDesc}".
+  2) Big hero with a blurred bg image with "HERO_BG_PLACEHOLDER" (1024x1024). Must show coin name "${coinName}" and reference "${projectDesc}".
   3) Vertical roadmap (5 steps), each under the heading. Fancy. make sure their width is fitting to the screen size.
-  4) Tokenomics with 3 fancy gradient/glass cards. under the header. laid out horizontally on computer taking up a a whole row of screen or on mobile vertically laid out"
-  5) Exchange/analytics with 6 placeholders (laid out nicely). under the heading.  2 rows, 3 columns on computer that take up the whole section of the screen and, vertical layout for mobile.
-  6) 2-card about section, .under the heading laid out horizontally and big enough to take up the whole section spacenot stacked. 
+  4) Tokenomics with 3 fancy gradient/glass cards. under the heading not next to. laid out horizontally on computer taking up a a whole row of screen or on mobile vertically laid out"
+  5) Exchange/analytics with 6 placeholders (laid out nicely). under the heading.  2 rows, 3 columns on computer that take up the whole section of the screen and, vertical layout for mobile. under the heading.
+  6) 2-card about section, .under the heading not next to and then the cards laid out horizontally and big enough to take up the whole section spacenot stacked. 
   7) footer section at the bottom not sticky. uses FOOTER_IMAGE_PLACEHOLDER on the left and on the right it uses placeholder social links that dont work
 - Buttons are placeholders only. Not clickable.
 - every element must be thought to match/contrast with the other elements and make sure their is a nice flow. 
@@ -548,7 +548,7 @@ Must suit both nav & footer, pick black/white for best contrast.`;
     // Generate 1024x1024 hero background
     try {
       progressMap[requestId].progress = 55;
-      const bgPrompt = `1024x1024 gradient/shimmer background image for a memecoin hero called "${coinName}", referencing "${projectDesc}", color palette: "${colorPalette}", pick black/white for main color contrast. Very futuristic.`;
+      const bgPrompt = `1024x1024 mainly black or white with some color from the pallete background dont make the subject of the image big make it small so it looks good on the bg of a site. (decide whats better for black or white from the pallete) its an image for a memecoin hero section on a website called "${coinName}", referencing "${projectDesc}", color palette: "${colorPalette}", pick black/white for main color contrast. Very futuristic.`;
       const bgResp = await openai.createImage({ prompt: bgPrompt, n:1, size:"1024x1024" });
       const bgUrl = bgResp.data.data[0].url;
       const bgFetch = await fetch(bgUrl);
