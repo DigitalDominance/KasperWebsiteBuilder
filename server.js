@@ -177,7 +177,6 @@ ${code}
     res.setHeader('Content-Type', 'application/php');
     res.setHeader('Content-Disposition', `attachment; filename="${sanitizeFilename(requestId)}_generated_website.php"`);
     return res.send(wordpressTemplate);
-  }
 }); // Proper closure: closing } for else if and ) for app.get
 
 /**************************************************
@@ -200,7 +199,7 @@ app.post('/create-wallet', async (req, res) => {
     // Check if username already exists
     const existingUser = await User.findOne({ username });
     if (existingUser) {
-      return res.status(400).json({ success: false, error: "Username already exists." });
+      return res.status(400).json({ success: false, error: "Username already exists. Please choose another one." });
     }
 
     // Create wallet using wasm_rpc.js
@@ -231,6 +230,11 @@ app.post('/create-wallet', async (req, res) => {
 
     return res.json({ success: true, walletAddress: receivingAddress });
   } catch (err) {
+    // Handle duplicate key error (just in case)
+    if (err.code === 11000 && err.keyPattern && err.keyPattern.username) {
+      return res.status(400).json({ success: false, error: "Username already exists. Please choose another one." });
+    }
+
     console.error("Error creating wallet:", err);
     return res.status(500).json({ success: false, error: "Internal server error." });
   }
