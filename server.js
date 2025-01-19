@@ -8,9 +8,8 @@ const mongoose = require('mongoose');
 const bcrypt = require('bcrypt');
 const { createWallet } = require('./wasm_rpc');
 const User = require('./models/User');
-const { initDepositSchedulers } = require('./services/depositService');
+const { initDepositSchedulers, fetchAndProcessUserDeposits } = require('./services/depositService');
 const crypto = require('crypto');
-const { fetchAndProcessUserDeposits } = require('./services/depositService');
 
 const app = express();
 
@@ -21,8 +20,8 @@ const app = express();
 const allowedOrigins = [
   'https://www.kaspercoin.net',
   'https://kaspercoin.net',
-  'http://localhost:3000', // Frontend dev
-  'http://localhost:8080'  // Additional dev
+  'http://localhost:3000',  // Frontend dev
+  'http://localhost:8080'   // Additional dev
 ];
 
 app.use(cors({
@@ -108,6 +107,7 @@ app.post('/start-generation', async (req, res) => {
       code: null
     };
 
+    // Start background generation
     doWebsiteGeneration(requestId, userInputs, user).catch(err => {
       console.error("Background generation error:", err);
       progressMap[requestId].status = 'error';
@@ -345,12 +345,49 @@ app.post('/save-generated-file', async (req, res) => {
     if (!user) {
       return res.status(400).json({ success: false, error: "Invalid wallet address." });
     }
-    user.generatedFiles.push({ requestId, content });
+
+    // Push with a generatedAt timestamp
+    user.generatedFiles.push({ 
+      requestId, 
+      content, 
+      generatedAt: new Date() 
+    });
     await user.save();
 
     return res.json({ success: true });
   } catch (err) {
     console.error("Error saving generated file:", err);
+    return res.status(500).json({ success: false, error: "Internal server error." });
+  }
+});
+
+/**************************************************
+ * NEW: GET /get-user-generations?walletAddress=XYZ
+ * Returns the user's generation files for the History Embed
+ **************************************************/
+app.get('/get-user-generations', async (req, res) => {
+  const { walletAddress } = req.query;
+  if (!walletAddress) {
+    return res.status(400).json({ success: false, error: "Missing walletAddress." });
+  }
+
+  try {
+    const user = await User.findOne({ walletAddress });
+    if (!user) {
+      return res.status(404).json({ success: false, error: "User not found." });
+    }
+
+    // Return all generatedFiles (requestId, content, generatedAt, etc.)
+    return res.json({ 
+      success: true, 
+      generatedFiles: user.generatedFiles.map(f => ({
+        requestId: f.requestId,
+        content: f.content,
+        generatedAt: f.generatedAt
+      }))
+    });
+  } catch (err) {
+    console.error("Error in get-user-generations:", err);
     return res.status(500).json({ success: false, error: "Internal server error." });
   }
 });
@@ -394,31 +431,21 @@ async function doWebsiteGeneration(requestId, userInputs, user) {
 </html>
 `;
 
-    // GPT system instructions with new disclaimers about "insanely beautiful", glass sections, etc.
+    // GPT system instructions with disclaimers about "insanely beautiful" etc.
     const systemMessage = `
 You are GPT-4o, an advanced website-building AI. Make the single-page HTML/CSS/JS site extremely beautiful, with:
 
-- **Insane** design details: fully responsive all components for mobile and computer, make sure buttons are fake and not actually clickable that goes for footer and nav and the hero button too, strong gradients, glassmorphism sections, advanced transitions, gradient text, popular appealing fonts. Black or white should be added as a primary with their chosen color pallette.
-- Make sure all the components flow nicely and are spaced and placed properly. contrast with the bg colors. make the background mainly black or white. and ensure the componenets contrast nice. now they dont. 
-- Each Section should flow nice between eachother and have a nice gradient background that compliment eachother or just flow nice. make the gradient from color palette "${colorPalette}" and either black or white. to make a nice background gradient.
-- Non-sticky nav: Left has IMAGE_PLACEHOLDER_LOGO (small circular token logo), Right has unclickable links: [Home, Roadmap, Tokenomics, etc.]. for mobile make the nav the logo on the left and the right have a button they click with the dropdown of the unclickable links. make sure the mobile nav is hidden on computer and the computer nav hidden on mobile. make the dropdown actually functional for mobile.
-- A big modern hero/splash below the nav. 
-  - Uses 1024x1024 IMAGE_PLACEHOLDER_BG as background (from color palette "${colorPalette}").
-  - Large heading = "${coinName}", referencing projectDesc: "${projectDesc}".
-  - Buttons (like "Buy" or "Learn More") appear but are placeholders only (not actually clickable). Pick one button, dont add 2.
-- A vertical roadmap (5 steps) with fancy progress bars or connectors that interacts as scrolled. (fills the progess bar color). 
-- A tokenomics section with 3 cards, each a fancy gradient or glass block as a card and a nice text on top to compliment it. (cool hover effects) laid out horizontally for computers laid out vertical for mobile.
-- An exchanges/analytics section with 6 placeholder blocks. (cool hover effects and gradient headings) give it a flex hero layout. on desktop should be 3 in each row with 2 rows. on mobile u decide.
-- A two card section that is an about section with the two cards being Why "${coinName}" and other being Our mission or something along the lines. give it some paragraph in both of the cards Nice glass cards that are gradient matched for the color palette "${colorPalette}" and the bg colors of that section "
-- **Footer** at the bottom (non-sticky), containing disclaimers, Telegram link placeholder, X link placeholder, and re-using IMAGE_PLACEHOLDER_LOGO. 
-- Entire site must be fully responsive, extremely well-styled, with advanced shimmer or glass transitions. and fade in fade out animations when the user is scrolling
-- **No leftover code fences** or triple backticks. Output as one single HTML <head> + <body> block with all styling included. 
-- The hero background must be the 1024x1024 image, the token logo is 256x256, both placeholders must be replaced. 
-- Buttons are placeholders only: they look like buttons but do nothing on click.
-- make sure the elements are under the heading in each section and all the sections must have a good layout. the components and sections should all be mobile responsive and computer responsive. dont use too much colors keep it nice with their color pallete.
-
+- **Insane** design details: fully responsive, strong gradients, glassmorphism sections, advanced transitions, gradient text, appealing fonts, etc.
+- Use color palette "${colorPalette}" plus black or white for high contrast.
+- Non-sticky nav with placeholders. For mobile, show a dropdown. For desktop, show links horizontally.
+- A big hero with a 1024x1024 image placeholder background, large heading with "${coinName}", referencing: "${projectDesc}".
+- Buttons are placeholders only; they do nothing on click.
+- A vertical roadmap, a tokenomics section with 3 fancy cards, an exchanges section with 6 placeholders, and a two-card "About" section.
+- A footer with disclaimers, Telegram placeholder, X placeholder, plus a small logo.
+- Everything must be in one <head> + <body> block, fully responsive, with advanced styling/animations.
+- No leftover code fences. Replace IMAGE_PLACEHOLDER_LOGO (256x256) and IMAGE_PLACEHOLDER_BG (1024x1024) with base64 data.
+    
 Use snippet below for partial inspiration (no code fences):
-
 ${snippetInspiration}
 `;
 
@@ -429,7 +456,10 @@ ${snippetInspiration}
       model: "gpt-4o",
       messages: [
         { role: "system", content: systemMessage },
-        { role: "user", content: `Generate the single-file site now. Must have insane design, transitions, advanced glass, placeholders for Telegram & X in the footer. All consistent with colorPalette: ${colorPalette}, coinName: ${coinName}, and projectDesc: ${projectDesc}. No leftover code fences.` }
+        { 
+          role: "user", 
+          content: `Generate the single-file site now. Must have insane design, transitions, advanced glass, placeholders for Telegram & X in the footer. All consistent with colorPalette: ${colorPalette}, coinName: ${coinName}, and projectDesc: ${projectDesc}. No leftover code fences.` 
+        }
       ],
       max_tokens: 3500,
       temperature: 0.9
@@ -445,10 +475,8 @@ ${snippetInspiration}
     progressMap[requestId].progress = 50;
     try {
       const logoPrompt = `Transparent circular token logo, 256x256, for a memecoin called "${coinName}". 
-                          Color palette: "${colorPalette}", vibe: ${projectDesc}.
-                          Must match coin name and have no extra text or background elements. 
-                          Very eye-catching, simple, only the logo.`;
-
+Color palette: "${colorPalette}", vibe: ${projectDesc}.
+Must be eye-catching, no extra text/background.`;
       const logoResp = await openai.createImage({
         prompt: logoPrompt,
         n: 1,
@@ -461,7 +489,7 @@ ${snippetInspiration}
         "data:image/png;base64," + Buffer.from(logoBuffer).toString("base64");
     } catch (err) {
       console.error("Logo generation error:", err);
-      // fallback
+      // fallback if error
       placeholders["IMAGE_PLACEHOLDER_LOGO"] =
         "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAUAAAAFCAYAAACNbyblAAAAHElEQVQI12Nk+M+ACzFEFwoKMvClX6BAsAwAGgGFu6+opmQAAAABJRU5ErkJggg==";
     }
@@ -469,12 +497,9 @@ ${snippetInspiration}
     // Generate the 1024x1024 BG hero
     progressMap[requestId].progress = 60;
     try {
-      const bgPrompt = `1024x1024 advanced gradient/shimmer background for a memecoin hero section called "${coinName}", 
-                        color palette: "${colorPalette}" and black or white as a primary, referencing ${projectDesc}, 
-                        futuristic, extremely nice, consistent with project vibe. 
-                        This is the main hero splash background. 
-                        Must match coin name & color.`;
-
+      const bgPrompt = `1024x1024 advanced gradient/shimmer background for a memecoin hero called "${coinName}", 
+color palette: "${colorPalette}" and black/white, referencing ${projectDesc}, 
+futuristic and extremely nice.`;
       const bgResp = await openai.createImage({
         prompt: bgPrompt,
         n: 1,
@@ -487,7 +512,7 @@ ${snippetInspiration}
         "data:image/png;base64," + Buffer.from(bgBuffer).toString("base64");
     } catch (err) {
       console.error("BG generation error:", err);
-      // fallback
+      // fallback if error
       placeholders["IMAGE_PLACEHOLDER_BG"] =
         "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAUAAAAFCAYAAACNbyblAAAAHElEQVQI12Nk+M+ACzFEFwoKMvClX6BAsAwAGgGFu6+opmQAAAABJRU5ErkJggg==";
     }
@@ -501,7 +526,7 @@ ${snippetInspiration}
       siteCode = siteCode.replace(regex, base64Uri);
     }
 
-    // remove triple backticks
+    // remove any leftover triple backticks
     siteCode = siteCode.replace(/```+/g, "");
 
     progressMap[requestId].progress = 90;
@@ -511,10 +536,11 @@ ${snippetInspiration}
     progressMap[requestId].status = "done";
     progressMap[requestId].progress = 100;
 
-    // Save to user's generated files
+    // Save to user's generated files with timestamp
     user.generatedFiles.push({
       requestId,
-      content: siteCode
+      content: siteCode,
+      generatedAt: new Date()
     });
     await user.save();
 
@@ -524,7 +550,6 @@ ${snippetInspiration}
     progressMap[requestId].progress = 100;
   }
 }
-
 
 /**************************************************
  * Initialize Deposit Schedulers
