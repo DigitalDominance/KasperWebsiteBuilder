@@ -215,6 +215,31 @@ ${code}
 });
 
 /**************************************************
+ * GET /get-credits?walletAddress=XYZ
+ * Securely fetches the current credits for a given wallet address.
+ **************************************************/
+app.get('/get-credits', async (req, res) => {
+  const { walletAddress } = req.query;
+
+  if (!walletAddress) {
+    return res.status(400).json({ success: false, error: "walletAddress is required." });
+  }
+
+  try {
+    const user = await User.findOne({ walletAddress });
+
+    if (!user) {
+      return res.status(400).json({ success: false, error: "Invalid wallet address." });
+    }
+
+    return res.json({ success: true, credits: user.credits });
+  } catch (err) {
+    console.error("Error fetching credits:", err);
+    return res.status(500).json({ success: false, error: "Internal server error." });
+  }
+});
+
+/**************************************************
  * POST /create-wallet
  * Expects:
  * {
@@ -358,13 +383,6 @@ app.post('/save-generated-file', async (req, res) => {
     return res.status(500).json({ success: false, error: "Internal server error." });
   }
 });
-
-/**************************************************
- * Utility to sanitize filenames
- **************************************************/
-function sanitizeFilename(name) {
-  return name.replace(/[^a-z0-9]/gi, '_').toLowerCase();
-}
 
 /**************************************************
  * Background Generation Function
