@@ -2,30 +2,23 @@
 
 const express = require('express');
 const router = express.Router();
-const { createNewWallet, getUserWalletDetails } = require('../services/walletService');
+const { createNewWallet } = require('../services/walletService');
 
-// POST /create-wallet
 router.post('/create-wallet', async (req, res) => {
   const { username, password } = req.body;
 
-  if (!username || !password) {
-    return res.status(400).json({ success: false, error: "Username and password are required." });
+  try {
+    const { walletAddress } = await createNewWallet(username, password);
+    res.json({ success: true, walletAddress });
+  } catch (err) {
+    console.error('Error creating wallet:', err);
+    // Handle validation errors
+    if (err.name === 'ValidationError') {
+      const errors = Object.values(err.errors).map(e => e.message);
+      return res.status(400).json({ success: false, error: errors.join(', ') });
+    }
+    res.status(500).json({ success: false, error: 'Internal server error.' });
   }
-
-  const result = await createNewWallet(username, password);
-  return res.json(result);
-});
-
-// POST /connect-wallet
-router.post('/connect-wallet', async (req, res) => {
-  const { walletAddress, password } = req.body;
-
-  if (!walletAddress || !password) {
-    return res.status(400).json({ success: false, error: "Wallet address and password are required." });
-  }
-
-  const result = await getUserWalletDetails(walletAddress, password);
-  return res.json(result);
 });
 
 module.exports = router;
