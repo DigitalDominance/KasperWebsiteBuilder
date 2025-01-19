@@ -180,20 +180,21 @@ async function fetchAndProcessAllUsersKaspa() {
  * Cron-based deposit checks, every 1 minute.
  */
 function initDepositSchedulers() {
-  // KASPER
-  cron.schedule('*/1 * * * *', async () => {
-    console.log('Fetching and processing KASPER deposits for all users...');
+  // KASPER => every 10 seconds
+  cron.schedule('*/10 * * * * *', async () => {
+    console.log('Fetching KASPER deposits (every 10s) ...');
     await fetchAndProcessAllUsersKasper();
   });
 
-  // KAS
-  cron.schedule('*/1 * * * *', async () => {
-    console.log('Fetching and processing KAS deposits for all users...');
+  // KAS => every 10 seconds
+  cron.schedule('*/10 * * * * *', async () => {
+    console.log('Fetching KAS deposits (every 10s) ...');
     await fetchAndProcessAllUsersKaspa();
   });
 
-  console.log('Deposit schedulers initialized.');
+  console.log('Deposit schedulers initialized (10s intervals).');
 }
+
 
 module.exports = {
   initDepositSchedulers,
