@@ -181,13 +181,13 @@ async function fetchAndProcessAllUsersKaspa() {
  */
 function initDepositSchedulers() {
   // KASPER => every 10 seconds
-  cron.schedule('*/10 * * * * *', async () => {
+  cron.schedule('*/45 * * * * *', async () => {
     console.log('Fetching KASPER deposits (every 10s) ...');
     await fetchAndProcessAllUsersKasper();
   });
 
   // KAS => every 10 seconds
-  cron.schedule('*/10 * * * * *', async () => {
+  cron.schedule('*/45 * * * * *', async () => {
     console.log('Fetching KAS deposits (every 10s) ...');
     await fetchAndProcessAllUsersKaspa();
   });
