@@ -398,20 +398,20 @@ async function doWebsiteGeneration(requestId, userInputs, user) {
     const systemMessage = `
 You are GPT-4o, an advanced website-building AI. Make the single-page HTML/CSS/JS site extremely beautiful, with:
 
-- **Insane** design details: fully responsive all components for mobile and computer, make sure buttons are fake and not actually clickable, strong gradients, glassmorphism sections, advanced transitions, gradient text, popular appealing fonts. Black or white should be added as a primary with their chosen color pallette.
+- **Insane** design details: fully responsive all components for mobile and computer, make sure buttons are fake and not actually clickable that goes for footer and nav and the hero button too, strong gradients, glassmorphism sections, advanced transitions, gradient text, popular appealing fonts. Black or white should be added as a primary with their chosen color pallette.
 - Make sure all the components flow nicely/contrast with the bg colors. make the background mainly black or white. and ensure the componenets contrast nice. now they dont.
 - Each Section should flow nice between eachother and have a nice gradient background that compliment eachother or just flow nice. make the gradient from color palette "${colorPalette}" and either black or white. to make a nice background gradient.
-- Non-sticky nav: Left has IMAGE_PLACEHOLDER_LOGO (small circular token logo), Right has unclickable links: [Home, Roadmap, Tokenomics, etc.]. for mobile make the nav the logo on the left and the right have a button they click with the dropdown of the unclickable links. 
+- Non-sticky nav: Left has IMAGE_PLACEHOLDER_LOGO (small circular token logo), Right has unclickable links: [Home, Roadmap, Tokenomics, etc.]. for mobile make the nav the logo on the left and the right have a button they click with the dropdown of the unclickable links. make sure the mobile nav is hidden on computer and the computer nav hidden on mobile. make the dropdown actually functional for mobile.
 - A big modern hero/splash below the nav. 
   - Uses 1024x1024 IMAGE_PLACEHOLDER_BG as background (from color palette "${colorPalette}").
   - Large heading = "${coinName}", referencing projectDesc: "${projectDesc}".
   - Buttons (like "Buy" or "Learn More") appear but are placeholders only (not actually clickable). Pick one button, dont add 2.
 - A vertical roadmap (5 steps) with fancy progress bars or connectors that interacts as scrolled. (fills the progess bar color). 
-- A tokenomics section with 3 cards, each a fancy gradient or glass block as a card and a nice text on top to compliment it. (cool hover effects)
+- A tokenomics section with 3 cards, each a fancy gradient or glass block as a card and a nice text on top to compliment it. (cool hover effects) laid out horizontally for computers laid out vertical for mobile.
 - An exchanges/analytics section with 6 placeholder blocks. (cool hover effects and gradient headings) give it a flex hero layout. on desktop should be 3 in each row with 2 rows. on mobile u decide.
-- A two card section that is an about section with the two cards being Why "${coinName}" and other being Our mission or something along the lines. Nice glass cards that are gradient matched for the color palette "${colorPalette}" and the bg colors of that section "
+- A two card section that is an about section with the two cards being Why "${coinName}" and other being Our mission or something along the lines. give it some paragraph in both of the cards Nice glass cards that are gradient matched for the color palette "${colorPalette}" and the bg colors of that section "
 - **Footer** at the bottom (non-sticky), containing disclaimers, Telegram link placeholder, X link placeholder, and re-using IMAGE_PLACEHOLDER_LOGO. 
-- Entire site must be fully responsive, extremely well-styled, with advanced shimmer or glass transitions. 
+- Entire site must be fully responsive, extremely well-styled, with advanced shimmer or glass transitions. and fade in fade out animations when the user is scrolling
 - **No leftover code fences** or triple backticks. Output as one single HTML <head> + <body> block with all styling included. 
 - The hero background must be the 1024x1024 image, the token logo is 256x256, both placeholders must be replaced. 
 - Buttons are placeholders only: they look like buttons but do nothing on click.
