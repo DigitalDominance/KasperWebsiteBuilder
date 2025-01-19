@@ -399,7 +399,7 @@ async function doWebsiteGeneration(requestId, userInputs, user) {
 You are GPT-4o, an advanced website-building AI. Make the single-page HTML/CSS/JS site extremely beautiful, with:
 
 - **Insane** design details: fully responsive all components for mobile and computer, make sure buttons are fake and not actually clickable that goes for footer and nav and the hero button too, strong gradients, glassmorphism sections, advanced transitions, gradient text, popular appealing fonts. Black or white should be added as a primary with their chosen color pallette.
-- Make sure all the components flow nicely/contrast with the bg colors. make the background mainly black or white. and ensure the componenets contrast nice. now they dont.
+- Make sure all the components flow nicely and are spaced and placed properly. contrast with the bg colors. make the background mainly black or white. and ensure the componenets contrast nice. now they dont. 
 - Each Section should flow nice between eachother and have a nice gradient background that compliment eachother or just flow nice. make the gradient from color palette "${colorPalette}" and either black or white. to make a nice background gradient.
 - Non-sticky nav: Left has IMAGE_PLACEHOLDER_LOGO (small circular token logo), Right has unclickable links: [Home, Roadmap, Tokenomics, etc.]. for mobile make the nav the logo on the left and the right have a button they click with the dropdown of the unclickable links. make sure the mobile nav is hidden on computer and the computer nav hidden on mobile. make the dropdown actually functional for mobile.
 - A big modern hero/splash below the nav. 
@@ -415,6 +415,7 @@ You are GPT-4o, an advanced website-building AI. Make the single-page HTML/CSS/J
 - **No leftover code fences** or triple backticks. Output as one single HTML <head> + <body> block with all styling included. 
 - The hero background must be the 1024x1024 image, the token logo is 256x256, both placeholders must be replaced. 
 - Buttons are placeholders only: they look like buttons but do nothing on click.
+- make sure the elements are under the heading in each section and all the sections must have a good layout. the components and sections should all be mobile responsive and computer responsive. dont use too much colors keep it nice with their color pallete.
 
 Use snippet below for partial inspiration (no code fences):
 
