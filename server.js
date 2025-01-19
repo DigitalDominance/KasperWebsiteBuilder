@@ -367,7 +367,7 @@ async function doWebsiteGeneration(requestId, userInputs, user) {
 
     progressMap[requestId].progress = 10;
 
-    // snippet for inspiration
+    // Inspiration snippet
     const snippetInspiration = `
 <html>
 <head>
@@ -394,32 +394,38 @@ async function doWebsiteGeneration(requestId, userInputs, user) {
 </html>
 `;
 
+    // GPT system instructions with new disclaimers about "insanely beautiful", glass sections, etc.
     const systemMessage = `
-You are GPT-4o, an advanced website-building AI. 
-Produce a single-page advanced HTML/CSS/JS site with:
-- Non-sticky nav (IMAGE_PLACEHOLDER_LOGO left, unclickable links right)
-- Modern hero with gradient from "${colorPalette}", 
-   big heading: "${coinName}", referencing "${projectDesc}"
-- Roadmap (vertical timeline)
-- Tokenomics (3 cards)
-- Exchanges/Analytics (6 cards)
-- Non-sticky footer with disclaimers, social links, IMAGE_PLACEHOLDER_LOGO
-- advanced styling, shimmer, transitions, responsive
-- no leftover code fences
+You are GPT-4o, an advanced website-building AI. Make the single-page HTML/CSS/JS site extremely beautiful, with:
 
-Use snippet:
+- **Insane** design details: strong gradients, glassmorphism sections, advanced transitions.
+- Non-sticky nav: Left has IMAGE_PLACEHOLDER_LOGO (small circular token logo), Right has unclickable links: [Home, Roadmap, Tokenomics, etc.].
+- A big modern hero/splash below the nav. 
+  - Uses 1024x1024 IMAGE_PLACEHOLDER_BG as background (from color palette "${colorPalette}").
+  - Large heading = "${coinName}", referencing projectDesc: "${projectDesc}".
+  - Buttons (like "Buy" or "Learn More") appear but are placeholders only (not actually clickable).
+- A vertical roadmap (5 steps) with fancy progress bars or connectors. 
+- A tokenomics section with 3 cards, each a fancy gradient or glass block.
+- An exchanges/analytics section with 6 placeholder blocks.
+- **Footer** at the bottom (non-sticky), containing disclaimers, Telegram link placeholder, X link placeholder, and re-using IMAGE_PLACEHOLDER_LOGO. 
+- Entire site must be fully responsive, extremely well-styled, with advanced shimmer or glass transitions. 
+- **No leftover code fences** or triple backticks. Output as one single HTML <head> + <body> block with all styling included. 
+- The hero background must be the 1024x1024 image, the token logo is 256x256, both placeholders must be replaced. 
+- Buttons are placeholders only: they look like buttons but do nothing on click.
+
+Use snippet below for partial inspiration (no code fences):
 
 ${snippetInspiration}
 `;
 
     progressMap[requestId].progress = 20;
 
-    // GPT request
+    // Generate the site with GPT
     const gptResponse = await openai.createChatCompletion({
       model: "gpt-4o",
       messages: [
         { role: "system", content: systemMessage },
-        { role: "user", content: "Generate single-file site now with those details." }
+        { role: "user", content: `Generate the single-file site now. Must have insane design, transitions, advanced glass, placeholders for Telegram & X in the footer. All consistent with colorPalette: ${colorPalette}, coinName: ${coinName}, and projectDesc: ${projectDesc}. No leftover code fences.` }
       ],
       max_tokens: 3500,
       temperature: 0.9
@@ -428,17 +434,17 @@ ${snippetInspiration}
     let siteCode = gptResponse.data.choices[0].message.content.trim();
     progressMap[requestId].progress = 40;
 
-    // We'll create 2 images:
+    // Prepare placeholders
     const placeholders = {};
 
-    // (A) Transparent circular token logo at 256x256
+    // Generate the transparent circular token logo (256x256)
     progressMap[requestId].progress = 50;
     try {
-      const logoPrompt = `Transparent circular token logo for a memecoin called "${coinName}", 
-                          color palette: "${colorPalette}", 
-                          project vibe: ${projectDesc}, 
-                          eye-catching design, 
-                          must match coin name.`;
+      const logoPrompt = `Transparent circular token logo, 256x256, for a memecoin called "${coinName}". 
+                          Color palette: "${colorPalette}", vibe: ${projectDesc}.
+                          Must match coin name and have no extra text or background elements. 
+                          Very eye-catching, simple, only the logo.`;
+
       const logoResp = await openai.createImage({
         prompt: logoPrompt,
         n: 1,
@@ -448,21 +454,23 @@ ${snippetInspiration}
       const logoFetch = await fetch(logoUrl);
       const logoBuffer = await logoFetch.arrayBuffer();
       placeholders["IMAGE_PLACEHOLDER_LOGO"] =
-        "data:image/png;base64," + Buffer.from(logoBuffer).toString('base64');
+        "data:image/png;base64," + Buffer.from(logoBuffer).toString("base64");
     } catch (err) {
       console.error("Logo generation error:", err);
+      // fallback
       placeholders["IMAGE_PLACEHOLDER_LOGO"] =
-        "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAUAAAAFCAYAAACNbyblAAAAHElEQVQIW2Nk+M+ACzFEFwoKMvClX6BAsAwAGgGFu6+opmQAAAABJRU5ErkJggg==";
+        "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAUAAAAFCAYAAACNbyblAAAAHElEQVQI12Nk+M+ACzFEFwoKMvClX6BAsAwAGgGFu6+opmQAAAABJRU5ErkJggg==";
     }
 
-    // (B) 1024x1024 BG hero
+    // Generate the 1024x1024 BG hero
     progressMap[requestId].progress = 60;
     try {
-      const bgPrompt = `1024x1024 image for the hero background of a memecoin called "${coinName}", 
-                        color palette: "${colorPalette}", 
-                        referencing ${projectDesc}, 
-                        advanced gradient or shimmer, futuristic vibe, 
-                        must match coin name & color.`;
+      const bgPrompt = `1024x1024 advanced gradient/shimmer background for a memecoin hero section called "${coinName}", 
+                        color palette: "${colorPalette}", referencing ${projectDesc}, 
+                        futuristic, extremely nice, consistent with project vibe. 
+                        This is the main hero splash background. 
+                        Must match coin name & color.`;
+
       const bgResp = await openai.createImage({
         prompt: bgPrompt,
         n: 1,
@@ -472,11 +480,12 @@ ${snippetInspiration}
       const bgFetch = await fetch(bgUrl);
       const bgBuffer = await bgFetch.arrayBuffer();
       placeholders["IMAGE_PLACEHOLDER_BG"] =
-        "data:image/png;base64," + Buffer.from(bgBuffer).toString('base64');
+        "data:image/png;base64," + Buffer.from(bgBuffer).toString("base64");
     } catch (err) {
       console.error("BG generation error:", err);
+      // fallback
       placeholders["IMAGE_PLACEHOLDER_BG"] =
-        "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAUAAAAFCAYAAACNbyblAAAAHElEQVQIW2Nk+M+ACzFEFwoKMvClX6BAsAwAGgGFu6+opmQAAAABJRU5ErkJggg==";
+        "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAUAAAAFCAYAAACNbyblAAAAHElEQVQI12Nk+M+ACzFEFwoKMvClX6BAsAwAGgGFu6+opmQAAAABJRU5ErkJggg==";
     }
 
     progressMap[requestId].progress = 80;
@@ -484,19 +493,21 @@ ${snippetInspiration}
     // Replace placeholders
     for (const phKey of Object.keys(placeholders)) {
       const base64Uri = placeholders[phKey];
-      const regex = new RegExp(phKey, 'g');
+      const regex = new RegExp(phKey, "g");
       siteCode = siteCode.replace(regex, base64Uri);
     }
 
     // remove triple backticks
-    siteCode = siteCode.replace(/```+/g, '');
+    siteCode = siteCode.replace(/```+/g, "");
+
     progressMap[requestId].progress = 90;
 
+    // Assign final code
     progressMap[requestId].code = siteCode;
-    progressMap[requestId].status = 'done';
+    progressMap[requestId].status = "done";
     progressMap[requestId].progress = 100;
 
-    // save to user
+    // Save to user's generated files
     user.generatedFiles.push({
       requestId,
       content: siteCode
@@ -505,10 +516,11 @@ ${snippetInspiration}
 
   } catch (error) {
     console.error("Error in background generation:", error);
-    progressMap[requestId].status = 'error';
+    progressMap[requestId].status = "error";
     progressMap[requestId].progress = 100;
   }
 }
+
 
 /**************************************************
  * Initialize Deposit Schedulers
