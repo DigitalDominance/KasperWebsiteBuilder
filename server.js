@@ -398,7 +398,7 @@ async function doWebsiteGeneration(requestId, userInputs, user) {
     const systemMessage = `
 You are GPT-4o, an advanced website-building AI. Make the single-page HTML/CSS/JS site extremely beautiful, with:
 
-- **Insane** design details: strong gradients, glassmorphism sections, advanced transitions, gradient text, popular appealing fonts. Black or white should be added as a primary with their chosen color pallette.
+- **Insane** design details: fully responsive for mobile, strong gradients, glassmorphism sections, advanced transitions, gradient text, popular appealing fonts. Black or white should be added as a primary with their chosen color pallette.
 - Each Section should flow nice between eachother and have a nice gradient background that compliment eachother or just flow nice. make the gradient from color palette "${colorPalette}" and either black or white. to make a nice background gradient.
 - Non-sticky nav: Left has IMAGE_PLACEHOLDER_LOGO (small circular token logo), Right has unclickable links: [Home, Roadmap, Tokenomics, etc.].
 - A big modern hero/splash below the nav. 
