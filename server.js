@@ -6,6 +6,11 @@ const cors = require('cors');
 const bodyParser = require('body-parser');
 const { Configuration, OpenAIApi } = require('openai');
 const fetch = require('node-fetch');
+const mongoose = require('mongoose');
+const bcrypt = require('bcrypt');
+const CryptoJS = require('crypto-js'); // For encrypting sensitive data
+const { createWallet } = require('./wasm_rpc');
+const User = require('./models/User');
 
 const app = express();
 
@@ -23,6 +28,17 @@ app.use(cors({
 
 app.use(bodyParser.json());
 
+// Connect to MongoDB
+mongoose.connect(process.env.MONGO_URI, {
+  useNewUrlParser: true,
+  useUnifiedTopology: true
+})
+.then(() => console.log('Connected to MongoDB'))
+.catch(err => {
+  console.error('Failed to connect to MongoDB:', err);
+  process.exit(1);
+});
+
 // OpenAI config
 const configuration = new Configuration({
   apiKey: process.env.OPENAI_API_KEY,
@@ -34,12 +50,6 @@ const openai = new OpenAIApi(configuration);
  **************************************************/
 const progressMap = {};
 
-// progressMap[requestId] = {
-//   status: 'in-progress' | 'done' | 'error',
-//   progress: number, // 0..100
-//   code: string | null
-// };
-
 /** Generate a random ID (for request tracking) */
 function generateRequestId() {
   return Math.random().toString(36).substr(2, 9);
@@ -49,7 +59,7 @@ function generateRequestId() {
  * GET /
  **************************************************/
 app.get('/', (req, res) => {
-  res.send('KasperCoin Website Builder with refined GPT-4o instructions is running!');
+  res.send('KasperCoin Website Builder API is running!');
 });
 
 /**************************************************
@@ -64,7 +74,19 @@ app.get('/', (req, res) => {
  * }
  * Returns { requestId }
  **************************************************/
-app.post('/start-generation', (req, res) => {
+app.post('/start-generation', async (req, res) => {
+  const { walletAddress, userInputs } = req.body;
+
+  if (!walletAddress || !userInputs) {
+    return res.status(400).json({ error: "walletAddress and userInputs are required." });
+  }
+
+  // Verify user exists
+  const user = await User.findOne({ walletAddress });
+  if (!user) {
+    return res.status(400).json({ error: "Invalid wallet address." });
+  }
+
   const requestId = generateRequestId();
 
   progressMap[requestId] = {
@@ -73,7 +95,7 @@ app.post('/start-generation', (req, res) => {
     code: null
   };
 
-  doWebsiteGeneration(requestId, req.body.userInputs)
+  doWebsiteGeneration(requestId, userInputs, user)
     .catch(err => {
       console.error("Background generation error:", err);
       progressMap[requestId].status = 'error';
@@ -155,7 +177,305 @@ ${code}
   }
 });
 
-/** Utility to sanitize filenames */
+/**************************************************
+ * POST /create-wallet
+ * Expects:
+ * {
+ *   username: "UserName",
+ *   password: "UserPassword"
+ * }
+ * Returns { success: true, walletAddress }
+ **************************************************/
+app.post('/create-wallet', async (req, res) => {
+  const { username, password } = req.body;
+
+  if (!username || !password) {
+    return res.status(400).json({ success: false, error: "Username and password are required." });
+  }
+
+  try {
+    // Check if username already exists
+    const existingUser = await User.findOne({ username });
+    if (existingUser) {
+      return res.status(400).json({ success: false, error: "Username already exists." });
+    }
+
+    // Create wallet using wasm_rpc.js
+    const walletData = await createWallet();
+
+    if (!walletData.success) {
+      return res.status(500).json({ success: false, error: "Wallet creation failed." });
+    }
+
+    const { mnemonic, receivingAddress, xPrv } = walletData;
+
+    // Hash the password
+    const saltRounds = 10;
+    const passwordHash = await bcrypt.hash(password, saltRounds);
+
+    // Encrypt mnemonic and xPrv
+    const mnemonicEncrypted = CryptoJS.AES.encrypt(mnemonic, process.env.ENCRYPTION_KEY).toString();
+    const xPrvEncrypted = CryptoJS.AES.encrypt(xPrv, process.env.ENCRYPTION_KEY).toString();
+
+    // Create new user
+    const newUser = new User({
+      username,
+      walletAddress: receivingAddress,
+      passwordHash,
+      mnemonicEncrypted,
+      xPrvEncrypted,
+      generatedFiles: []
+    });
+
+    await newUser.save();
+
+    return res.json({ success: true, walletAddress: receivingAddress });
+  } catch (err) {
+    console.error("Error creating wallet:", err);
+    return res.status(500).json({ success: false, error: "Internal server error." });
+  }
+});
+
+/**************************************************
+ * POST /connect-wallet
+ * Expects:
+ * {
+ *   walletAddress: "UserWalletAddress",
+ *   password: "UserPassword"
+ * }
+ * Returns { success: true, username, walletAddress, credits, generatedFiles }
+ **************************************************/
+app.post('/connect-wallet', async (req, res) => {
+  const { walletAddress, password } = req.body;
+
+  if (!walletAddress || !password) {
+    return res.status(400).json({ success: false, error: "Wallet address and password are required." });
+  }
+
+  try {
+    // Find user by walletAddress
+    const user = await User.findOne({ walletAddress });
+
+    if (!user) {
+      return res.status(400).json({ success: false, error: "Invalid wallet address or password." });
+    }
+
+    // Compare password
+    const passwordMatch = await bcrypt.compare(password, user.passwordHash);
+
+    if (!passwordMatch) {
+      return res.status(400).json({ success: false, error: "Invalid wallet address or password." });
+    }
+
+    return res.json({
+      success: true,
+      username: user.username,
+      walletAddress: user.walletAddress,
+      credits: user.credits,
+      generatedFiles: user.generatedFiles
+    });
+  } catch (err) {
+    console.error("Error connecting wallet:", err);
+    return res.status(500).json({ success: false, error: "Internal server error." });
+  }
+});
+
+/**************************************************
+ * POST /save-generated-file
+ * Expects:
+ * {
+ *   walletAddress: "UserWalletAddress",
+ *   requestId: "XYZ",
+ *   content: "Generated HTML Content"
+ * }
+ * Returns { success: true }
+ **************************************************/
+app.post('/save-generated-file', async (req, res) => {
+  const { walletAddress, requestId, content } = req.body;
+
+  if (!walletAddress || !requestId || !content) {
+    return res.status(400).json({ success: false, error: "All fields are required." });
+  }
+
+  try {
+    // Find user by walletAddress
+    const user = await User.findOne({ walletAddress });
+
+    if (!user) {
+      return res.status(400).json({ success: false, error: "Invalid wallet address." });
+    }
+
+    // Add generated file to user's generatedFiles
+    user.generatedFiles.push({
+      requestId,
+      content
+    });
+
+    await user.save();
+
+    return res.json({ success: true });
+  } catch (err) {
+    console.error("Error saving generated file:", err);
+    return res.status(500).json({ success: false, error: "Internal server error." });
+  }
+});
+
+/**************************************************
+ * POST /scan-deposits
+ * Expects:
+ * {
+ *   walletAddress: "UserWalletAddress",
+ *   password: "UserPassword"
+ * }
+ * Returns { success: true, creditsAdded }
+ **************************************************/
+app.post('/scan-deposits', async (req, res) => {
+  const { walletAddress, password } = req.body;
+
+  if (!walletAddress || !password) {
+    return res.status(400).json({ success: false, error: "Wallet address and password are required." });
+  }
+
+  try {
+    // Find user by walletAddress
+    const user = await User.findOne({ walletAddress });
+
+    if (!user) {
+      return res.status(400).json({ success: false, error: "Invalid wallet address or password." });
+    }
+
+    // Compare password
+    const passwordMatch = await bcrypt.compare(password, user.passwordHash);
+
+    if (!passwordMatch) {
+      return res.status(400).json({ success: false, error: "Invalid wallet address or password." });
+    }
+
+    // Fetch transactions from Kaspa API
+    const newDeposits = await fetchKaspasDeposits(walletAddress);
+
+    let creditsAdded = 0;
+
+    for (const tx of newDeposits) {
+      const { hashRev, amount, currency } = tx;
+
+      // Check if transaction is already processed
+      const isProcessed = await isTransactionProcessed(hashRev, walletAddress);
+      if (!isProcessed) {
+        // Convert amount to credits
+        let credits = 0;
+        if (currency.toLowerCase() === 'kas') {
+          credits = Math.floor(amount / 5);
+        } else if (currency.toLowerCase() === 'kasper') {
+          credits = Math.floor(amount / 340);
+        }
+
+        if (credits > 0) {
+          // Update user's credits
+          user.credits += credits;
+          creditsAdded += credits;
+
+          // Save transaction as processed
+          await saveTransaction(hashRev, amount, currency, walletAddress);
+        }
+      }
+    }
+
+    await user.save();
+
+    return res.json({ success: true, creditsAdded });
+  } catch (err) {
+    console.error("Error scanning deposits:", err);
+    return res.status(500).json({ success: false, error: "Internal server error." });
+  }
+});
+
+/**************************************************
+ * Helper Functions
+ **************************************************/
+
+/**
+ * Fetch KAS/KASPER deposits for a given wallet address.
+ * @param {string} walletAddress
+ * @returns {Array} Array of deposit transactions
+ */
+async function fetchKaspasDeposits(walletAddress) {
+  try {
+    // Define currencies to monitor
+    const currencies = ['kas', 'kasper'];
+
+    const deposits = [];
+
+    for (const currency of currencies) {
+      // Fetch transactions from Kaspa API
+      const url = `https://api.kaspa.org/addresses/${encodeURIComponent(walletAddress)}/full-transactions-page?limit=100&fields=full`;
+
+      const response = await fetch(url);
+      if (!response.ok) {
+        console.error(`Error fetching transactions for ${walletAddress}:`, response.statusText);
+        continue;
+      }
+
+      const data = await response.json();
+
+      for (const tx of data) {
+        // Filter for incoming transfers
+        if (tx.outputs) {
+          for (const output of tx.outputs) {
+            if (output.script_public_key_address.toLowerCase() === walletAddress.toLowerCase()) {
+              deposits.push({
+                hashRev: tx.transaction_id,
+                amount: output.amount, // Assuming amount is in the smallest unit
+                currency: currency
+              });
+            }
+          }
+        }
+      }
+    }
+
+    return deposits;
+  } catch (err) {
+    console.error("Error fetching Kaspa deposits:", err);
+    return [];
+  }
+}
+
+/**
+ * Check if a transaction has already been processed.
+ * @param {string} hashRev
+ * @param {string} walletAddress
+ * @returns {boolean}
+ */
+async function isTransactionProcessed(hashRev, walletAddress) {
+  // Implement logic to check if transaction has been processed
+  // For simplicity, check if any user has this transaction hash in their generatedFiles
+  const user = await User.findOne({ walletAddress, 'generatedFiles.requestId': hashRev });
+  return !!user;
+}
+
+/**
+ * Save a processed transaction to the user's generatedFiles to prevent reprocessing.
+ * @param {string} hashRev
+ * @param {number} amount
+ * @param {string} currency
+ * @param {string} walletAddress
+ */
+async function saveTransaction(hashRev, amount, currency, walletAddress) {
+  // For simplicity, add a dummy generatedFile entry with the transaction hash
+  const user = await User.findOne({ walletAddress });
+  if (user) {
+    user.generatedFiles.push({
+      requestId: hashRev,
+      content: `Deposit of ${amount} ${currency.toUpperCase()}`
+    });
+    await user.save();
+  }
+}
+
+/**
+ * Utility to sanitize filenames
+ */
 function sanitizeFilename(name) {
   return name.replace(/[^a-z0-9]/gi, '_').toLowerCase();
 }
@@ -163,7 +483,7 @@ function sanitizeFilename(name) {
 /**************************************************
  * Background Generation Function
  **************************************************/
-async function doWebsiteGeneration(requestId, userInputs) {
+async function doWebsiteGeneration(requestId, userInputs, user) {
   try {
     const { coinName, colorPalette, projectDesc } = userInputs || {};
     if (!coinName || !colorPalette) {
@@ -172,8 +492,7 @@ async function doWebsiteGeneration(requestId, userInputs) {
 
     progressMap[requestId].progress = 10;
 
-    // This snippet is used as inspiration for shimmer, gradients, pinned footer, etc.
-    // We'll embed it in the system instructions, with no code fences.
+    // Inspiration snippet
     const snippetInspiration = `
 <html>
 <head>
@@ -182,7 +501,7 @@ async function doWebsiteGeneration(requestId, userInputs) {
     body {
       margin: 0; padding: 0;
       font-family: sans-serif;
-      /* We want a strong gradient that matches user's colorPalette. */
+      /* Strong gradient matching user's colorPalette */
     }
     .shimmer-bg {
       background: linear-gradient(90deg, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0.3) 50%, rgba(255,255,255,0.1) 100%);
@@ -225,10 +544,10 @@ Produce a single-page highly advanced and beautiful HTML/CSS/JS site based on ka
    - Heading for Tokenomics.
    - Exactly 3 cards laid out vertically with clean animations and crisp gradients.
 
-4.1) **Exchanges/Analytics Section***
-    -6 card section that has a heading above it.
-    - flex grid layout and each card has an exchange or anayltics platform to find their token on
-    -use placeholders
+4.1) **Exchanges/Analytics Section**
+    - 6 card section that has a heading above it.
+    - Flex grid layout and each card has an exchange or analytics platform to find their token on
+    - Use placeholders
 
 5) **Footer at Bottom (Non-Sticky)**
    - Contains disclaimers, social links, etc.
@@ -262,7 +581,7 @@ Produce a single-page highly advanced and beautiful HTML/CSS/JS site based on ka
          <script> ... any needed JS ... </script>
        </body>
      </html>
-   - Make sure to include all the final beautiful HTML, CSS, and JS. Quality is the most important thing. add gradients from either white or black and our color pallete in the backgrounds. make it nice.
+   - Make sure to include all the final beautiful HTML, CSS, and JS. Quality is the most important thing. Add gradients from either white or black and our color palette in the backgrounds. Make it nice.
 
 Use the snippet below as partial inspiration (but do not include code fences in your output):
 
@@ -274,7 +593,7 @@ Now generate the final code in one fully mobile and desktop responsive beautiful
     progressMap[requestId].progress = 20;
 
     const gptResponse = await openai.createChatCompletion({
-      model: "gpt-4o",
+      model: "gpt-4",
       messages: [
         { role: "system", content: systemMessage },
         { role: "user", content: "Generate the single-file site now, strictly following colorPalette, non-sticky nav/footer, 3 token cards, vertical roadmap timeline, no leftover code fences. Beautiful styling. Responsive. Modern." }
@@ -345,6 +664,370 @@ Now generate the final code in one fully mobile and desktop responsive beautiful
     progressMap[requestId].status = 'done';
     progressMap[requestId].progress = 100;
 
+    // Save generated file to user's account
+    user.generatedFiles.push({
+      requestId,
+      content: siteCode
+    });
+    await user.save();
+
+  } catch (error) {
+    console.error("Error in background generation:", error);
+    progressMap[requestId].status = 'error';
+    progressMap[requestId].progress = 100;
+  }
+}
+
+/**************************************************
+ * POST /scan-deposits
+ * Expects:
+ * {
+ *   walletAddress: "UserWalletAddress",
+ *   password: "UserPassword"
+ * }
+ * Returns { success: true, creditsAdded }
+ **************************************************/
+app.post('/scan-deposits', async (req, res) => {
+  const { walletAddress, password } = req.body;
+
+  if (!walletAddress || !password) {
+    return res.status(400).json({ success: false, error: "Wallet address and password are required." });
+  }
+
+  try {
+    // Find user by walletAddress
+    const user = await User.findOne({ walletAddress });
+
+    if (!user) {
+      return res.status(400).json({ success: false, error: "Invalid wallet address or password." });
+    }
+
+    // Compare password
+    const passwordMatch = await bcrypt.compare(password, user.passwordHash);
+
+    if (!passwordMatch) {
+      return res.status(400).json({ success: false, error: "Invalid wallet address or password." });
+    }
+
+    // Fetch transactions from Kaspa API
+    const newDeposits = await fetchKaspasDeposits(walletAddress);
+
+    let creditsAdded = 0;
+
+    for (const tx of newDeposits) {
+      const { hashRev, amount, currency } = tx;
+
+      // Check if transaction is already processed
+      const isProcessed = await isTransactionProcessed(hashRev, walletAddress);
+      if (!isProcessed) {
+        // Convert amount to credits
+        let credits = 0;
+        if (currency.toLowerCase() === 'kas') {
+          credits = Math.floor(amount / 5);
+        } else if (currency.toLowerCase() === 'kasper') {
+          credits = Math.floor(amount / 340);
+        }
+
+        if (credits > 0) {
+          // Update user's credits
+          user.credits += credits;
+          creditsAdded += credits;
+
+          // Save transaction as processed
+          await saveTransaction(hashRev, amount, currency, walletAddress);
+        }
+      }
+    }
+
+    await user.save();
+
+    return res.json({ success: true, creditsAdded });
+  } catch (err) {
+    console.error("Error scanning deposits:", err);
+    return res.status(500).json({ success: false, error: "Internal server error." });
+  }
+});
+
+/**************************************************
+ * Helper Functions
+ **************************************************/
+
+/**
+ * Fetch KAS/KASPER deposits for a given wallet address.
+ * @param {string} walletAddress
+ * @returns {Array} Array of deposit transactions
+ */
+async function fetchKaspasDeposits(walletAddress) {
+  try {
+    // Define currencies to monitor
+    const currencies = ['kas', 'kasper'];
+
+    const deposits = [];
+
+    for (const currency of currencies) {
+      // Fetch transactions from Kaspa API
+      const url = `https://api.kaspa.org/addresses/${encodeURIComponent(walletAddress)}/full-transactions-page?limit=100&fields=full`;
+
+      const response = await fetch(url);
+      if (!response.ok) {
+        console.error(`Error fetching transactions for ${walletAddress}:`, response.statusText);
+        continue;
+      }
+
+      const data = await response.json();
+
+      for (const tx of data) {
+        // Filter for incoming transfers
+        if (tx.outputs) {
+          for (const output of tx.outputs) {
+            if (output.script_public_key_address.toLowerCase() === walletAddress.toLowerCase()) {
+              deposits.push({
+                hashRev: tx.transaction_id,
+                amount: output.amount, // Assuming amount is in the smallest unit
+                currency: currency
+              });
+            }
+          }
+        }
+      }
+    }
+
+    return deposits;
+  } catch (err) {
+    console.error("Error fetching Kaspa deposits:", err);
+    return [];
+  }
+}
+
+/**
+ * Check if a transaction has already been processed.
+ * @param {string} hashRev
+ * @param {string} walletAddress
+ * @returns {boolean}
+ */
+async function isTransactionProcessed(hashRev, walletAddress) {
+  // Check if any generatedFile has the requestId as hashRev
+  const user = await User.findOne({ walletAddress, 'generatedFiles.requestId': hashRev });
+  return !!user;
+}
+
+/**
+ * Save a processed transaction to the user's generatedFiles to prevent reprocessing.
+ * @param {string} hashRev
+ * @param {number} amount
+ * @param {string} currency
+ * @param {string} walletAddress
+ */
+async function saveTransaction(hashRev, amount, currency, walletAddress) {
+  // Add a generatedFile entry with the transaction hash
+  const user = await User.findOne({ walletAddress });
+  if (user) {
+    user.generatedFiles.push({
+      requestId: hashRev,
+      content: `Deposit of ${amount} ${currency.toUpperCase()}`
+    });
+    await user.save();
+  }
+}
+
+/**************************************************
+ * Utility to sanitize filenames
+ **************************************************/
+function sanitizeFilename(name) {
+  return name.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+}
+
+/**************************************************
+ * Background Generation Function
+ **************************************************/
+async function doWebsiteGeneration(requestId, userInputs, user) {
+  try {
+    const { coinName, colorPalette, projectDesc } = userInputs || {};
+    if (!coinName || !colorPalette) {
+      throw new Error("Missing 'coinName' or 'colorPalette'.");
+    }
+
+    progressMap[requestId].progress = 10;
+
+    // Inspiration snippet
+    const snippetInspiration = `
+<html>
+<head>
+  <style>
+    /* Example gradient & shimmer */
+    body {
+      margin: 0; padding: 0;
+      font-family: sans-serif;
+      /* Strong gradient matching user's colorPalette */
+    }
+    .shimmer-bg {
+      background: linear-gradient(90deg, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0.3) 50%, rgba(255,255,255,0.1) 100%);
+      background-size: 200% 200%;
+      animation: shimmerMove 2s infinite;
+    }
+    @keyframes shimmerMove {
+      0% { background-position: -200% 0; }
+      100% { background-position: 200% 0; }
+    }
+  </style>
+</head>
+<body>
+  <!-- Example snippet with shimmer -->
+</body>
+</html>
+`;
+
+    // GPT system instructions
+    const systemMessage = `
+You are GPT-4o, an advanced website building AI, the best of them all. 
+Produce a single-page highly advanced and beautiful HTML/CSS/JS site based on kaspercoin.net with the following specifications:
+
+1) **Non-Sticky Nav (Top)**
+   - Contains IMAGE_PLACEHOLDER_LOGO on the left.
+   - Unclickable links (Home, Roadmap, Tokenomics, etc.) on the right.
+
+2) **Modern Beautiful Hero/Splash Below Nav**
+   - Uses a strong gradient background derived from "${colorPalette}".
+   - Includes IMAGE_PLACEHOLDER_BG as a decorative background or element.
+   - Big heading displaying the coin name: "${coinName}".
+   - Subheading referencing the project description: "${projectDesc}".
+   - No sticky behavior.
+
+3) **Roadmap Section**
+   - Vertical timeline or steps, each with a small progress bar.
+   - Use placeholder content.
+
+4) **Tokenomics Section**
+   - Heading for Tokenomics.
+   - Exactly 3 cards laid out vertically with clean animations and crisp gradients.
+
+4.1) **Exchanges/Analytics Section**
+    - 6 card section that has a heading above it.
+    - Flex grid layout and each card has an exchange or analytics platform to find their token on
+    - Use placeholders
+
+5) **Footer at Bottom (Non-Sticky)**
+   - Contains disclaimers, social links, etc.
+   - Includes IMAGE_PLACEHOLDER_LOGO.
+   - Must appear at the end of page content (not pinned/sticky).
+
+6) **Advanced Styling**
+   - Incorporate shimmer effects, transitions, and the provided colorPalette for gradients.
+   - Fully responsive design for desktop and mobile.
+   - Absolutely incorporate the colorPalette in the main backgrounds or sections.
+
+7) **Images**
+   - Must relate to coinName & projectDesc (to be used in DALL·E prompts).
+
+8) **Output Format**
+   - No leftover code fences or triple backticks.
+   - Output in ONE file with:
+     <!DOCTYPE html>
+     <html>
+       <head>
+         <meta charset="UTF-8"/>
+         <title>${coinName}</title>
+         <style> ... MUST USE colorPalette in gradients ... </style>
+       </head>
+       <body>
+         <!-- nav, hero, roadmap timeline, tokenomics (3 cards), footer. 
+              Non-sticky nav or footer. 
+              Must visually show gradient from colorPalette. 
+              Must show advanced shimmer or transitions. 
+         -->
+         <script> ... any needed JS ... </script>
+       </body>
+     </html>
+   - Make sure to include all the final beautiful HTML, CSS, and JS. Quality is the most important thing. Add gradients from either white or black and our color palette in the backgrounds. Make it nice.
+
+Use the snippet below as partial inspiration (but do not include code fences in your output):
+
+${snippetInspiration}
+
+Now generate the final code in one fully mobile and desktop responsive beautiful block with all HTML, CSS, and JS included.
+`;
+
+    progressMap[requestId].progress = 20;
+
+    const gptResponse = await openai.createChatCompletion({
+      model: "gpt-4",
+      messages: [
+        { role: "system", content: systemMessage },
+        { role: "user", content: "Generate the single-file site now, strictly following colorPalette, non-sticky nav/footer, 3 token cards, vertical roadmap timeline, no leftover code fences. Beautiful styling. Responsive. Modern." }
+      ],
+      max_tokens: 3500,
+      temperature: 0.9
+    });
+
+    let siteCode = gptResponse.data.choices[0].message.content.trim();
+    progressMap[requestId].progress = 40;
+
+    // Generate 2 images with DALL·E:
+    // 1) IMAGE_PLACEHOLDER_LOGO => must relate to coinName & projectDesc
+    // 2) IMAGE_PLACEHOLDER_BG => must reference colorPalette & coinName too
+    const placeholders = {};
+
+    // (A) LOGO
+    progressMap[requestId].progress = 50;
+    try {
+      const logoPrompt = `logo for a memecoin called "${coinName}", color palette "${colorPalette}", project vibe: ${projectDesc}, small eye-catching design, not sticky. Must match coin name.`;
+      const logoResp = await openai.createImage({
+        prompt: logoPrompt,
+        n: 1,
+        size: "256x256"
+      });
+      const logoUrl = logoResp.data.data[0].url;
+      const logoFetch = await fetch(logoUrl);
+      const logoBuffer = await logoFetch.arrayBuffer();
+      placeholders["IMAGE_PLACEHOLDER_LOGO"] = "data:image/png;base64," + Buffer.from(logoBuffer).toString('base64');
+    } catch (err) {
+      console.error("Logo generation error:", err);
+      placeholders["IMAGE_PLACEHOLDER_LOGO"] = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAUAAAAFCAYAAACNbyblAAAAHElEQVQIW2Nk+M+ACzFEFwoKMvClX6BAsAwAGgGFu6+opmQAAAABJRU5ErkJggg==";
+    }
+
+    // (B) BG
+    progressMap[requestId].progress = 60;
+    try {
+      const bgPrompt = `hero background for a memecoin called "${coinName}", color palette "${colorPalette}", referencing ${projectDesc}, advanced gradient or shimmer, futuristic. Must match coin name and color vibe.`;
+      const bgResp = await openai.createImage({
+        prompt: bgPrompt,
+        n: 1,
+        size: "256x256"
+      });
+      const bgUrl = bgResp.data.data[0].url;
+      const bgFetch = await fetch(bgUrl);
+      const bgBuffer = await bgFetch.arrayBuffer();
+      placeholders["IMAGE_PLACEHOLDER_BG"] = "data:image/png;base64," + Buffer.from(bgBuffer).toString('base64');
+    } catch (err) {
+      console.error("BG generation error:", err);
+      placeholders["IMAGE_PLACEHOLDER_BG"] = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAUAAAAFCAYAAACNbyblAAAAHElEQVQIW2Nk+M+ACzFEFwoKMvClX6BAsAwAGgGFu6+opmQAAAABJRU5ErkJggg==";
+    }
+
+    progressMap[requestId].progress = 80;
+
+    // Replace placeholders
+    Object.keys(placeholders).forEach(phKey => {
+      const base64Uri = placeholders[phKey];
+      const regex = new RegExp(phKey, 'g');
+      siteCode = siteCode.replace(regex, base64Uri);
+    });
+
+    // Remove triple backticks
+    siteCode = siteCode.replace(/```+/g, '');
+
+    progressMap[requestId].progress = 90;
+
+    progressMap[requestId].code = siteCode;
+    progressMap[requestId].status = 'done';
+    progressMap[requestId].progress = 100;
+
+    // Save generated file to user's account
+    user.generatedFiles.push({
+      requestId,
+      content: siteCode
+    });
+    await user.save();
+
   } catch (error) {
     console.error("Error in background generation:", error);
     progressMap[requestId].status = 'error';
@@ -357,5 +1040,5 @@ Now generate the final code in one fully mobile and desktop responsive beautiful
  **************************************************/
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
-  console.log(`KasperCoin Website Builder API running on port ${PORT}, GPT-4o!`);
+  console.log(`KasperCoin Website Builder API running on port ${PORT}!`);
 });
