@@ -481,17 +481,18 @@ async function doWebsiteGeneration(requestId, userInputs, user) {
     const systemMessage = `
 You are GPT-4o, an advanced website-building AI. Create a single-page HTML/CSS/JS site:
 
-- Use color palette "${colorPalette}" plus either white or black for the main background, whichever contrasts best.
+- Use a gradient of  "${colorPalette}" plus either white or black for the main background, whichever contrasts best.
 - Make all sections fully responsive with strong spacing, advanced transitions, glassmorphism, gradient text, etc. Advanced CSS, fade in animations hover animations etc
 - Separate sections in this order:
-  1) Nav (non-sticky) with a 256x256 transparent token logo => "NAV_IMAGE_PLACEHOLDER" (also repeated in footer as "FOOTER_IMAGE_PLACEHOLDER", same image). 
+  1) Nav (non-sticky) with a 256x256 transparent token logo => "NAV_IMAGE_PLACEHOLDER" on the left side and on the right side some placeholder nav links that dont work. (also repeated in footer as "FOOTER_IMAGE_PLACEHOLDER", same image). 
   2) Big hero with "HERO_BG_PLACEHOLDER" (1024x1024). Must show coin name "${coinName}" and reference "${projectDesc}".
-  3) Vertical roadmap (5 steps), each under the heading. Fancy. 
-  4) Tokenomics with 3 fancy gradient/glass cards. under the header.
-  5) Exchange/analytics with 6 placeholders (laid out nicely). under the header.
-  6) 2-card about section, .under the header
-  7) footer section at the bottom not sticky. uses FOOTER_IMAGE_PLACEHOLDER
+  3) Vertical roadmap (5 steps), each under the heading. Fancy. make sure their width is fitting to the screen size.
+  4) Tokenomics with 3 fancy gradient/glass cards. under the header. laid out horizontally on computer taking up a a whole row of screen or on mobile vertically laid out"
+  5) Exchange/analytics with 6 placeholders (laid out nicely). under the header.  2 rows, 3 columns on computer, vertical layout for mobile.
+  6) 2-card about section, .under the header laid our horizontally. 
+  7) footer section at the bottom not sticky. uses FOOTER_IMAGE_PLACEHOLDER on the left and on the right it uses placeholder social links that dont work
 - Buttons are placeholders only. Not clickable.
+- every element must be thought to match/contrast with the other elements and make sure their is a nice flow. 
 - Contrasting color scheme, picking black or white background to complement "${colorPalette}".
 - No leftover code fences.
 
