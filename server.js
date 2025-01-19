@@ -67,6 +67,7 @@ app.get('/', (req, res) => {
  * POST /start-generation
  * Expects:
  * {
+ *   walletAddress: "UserWalletAddress",
  *   userInputs: {
  *     coinName: "SomeCoin",
  *     colorPalette: "purple and neon-blue",
@@ -176,7 +177,8 @@ ${code}
     res.setHeader('Content-Type', 'application/php');
     res.setHeader('Content-Disposition', `attachment; filename="${sanitizeFilename(requestId)}_generated_website.php"`);
     return res.send(wordpressTemplate);
-});
+  }
+}); // Corrected closure
 
 /**************************************************
  * POST /create-wallet
