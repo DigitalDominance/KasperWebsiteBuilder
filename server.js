@@ -483,7 +483,7 @@ You are GPT-4o, an advanced website-building AI. Create a single-page HTML/CSS/J
 
 - Use a gradient of  "${colorPalette}" plus either white or black for the main background, whichever contrasts best.
 - Make all sections fully responsive with strong spacing, advanced transitions, glassmorphism, gradient text, etc. Advanced CSS, fade in animations hover animations etc.
-- make sure the sections all have the content under its heading and not next to it.
+- make sure the sections all have the content under its heading and not next to it. it keeps happening. stop doing that. a nice crisp layout. the heading should be next to the content rather above it
 - Separate sections in this order:
   1) Nav (non-sticky) with a 256x256 transparent token logo => "NAV_IMAGE_PLACEHOLDER" on the left side and on the right side some placeholder nav links that dont work. (also repeated in footer as "FOOTER_IMAGE_PLACEHOLDER", same image). 
   2) Big hero with "HERO_BG_PLACEHOLDER" (1024x1024). Must show coin name "${coinName}" and reference "${projectDesc}".
