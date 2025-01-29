@@ -537,6 +537,8 @@ No leftover code blocks or markdown fences.
 Ensure it is fully responsive. 
 All advanced animations, glass styling, etc. 
 make sure its formatted for GrapesJS.
+- Use a gradient of "${colorPalette}" plus the a "${themeSelection}" theme for the color scheming of the background and give an opposite contrast for the components. all sections backgrounds should have a "${themeSelection}" gradient theming following our colors.  keep a consistent theming across the site, gradient and nice looks.
+-properly l layout and size sites and components like grid things. 
 `
           }
         ],
